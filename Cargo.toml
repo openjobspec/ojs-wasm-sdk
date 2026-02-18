@@ -1,0 +1,36 @@
+[package]
+name = "ojs-wasm-sdk"
+version = "0.1.0"
+edition = "2021"
+description = "OJS (Open Job Spec) client SDK compiled to WebAssembly"
+license = "Apache-2.0"
+repository = "https://github.com/openjobspec/ojs-wasm-sdk"
+keywords = ["jobs", "queue", "wasm", "webassembly", "ojs"]
+categories = ["wasm", "web-programming"]
+readme = "README.md"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde-wasm-bindgen = "0.6"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "Headers",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    "Window",
+] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[profile.release]
+opt-level = "s"
+lto = true
