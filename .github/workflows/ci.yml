@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cargo check (wasm)
+        run: cargo check --target wasm32-unknown-unknown
+
+      - name: Clippy (wasm)
+        run: cargo clippy --target wasm32-unknown-unknown -- -D warnings
+
+  test:
+    name: Test (wasm-bindgen)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run tests (headless Chrome)
+        run: wasm-pack test --headless --chrome
+
+  build:
+    name: Build & Size Check
+    runs-on: ubuntu-latest
+    needs: [check, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build (release)
+        run: wasm-pack build --target web --release --out-dir pkg
+
+      - name: Check bundle size
+        run: |
+          WASM_FILE=pkg/ojs_wasm_sdk_bg.wasm
+          RAW_SIZE=$(wc -c < "$WASM_FILE" | tr -d ' ')
+          GZIP_SIZE=$(gzip -c "$WASM_FILE" | wc -c | tr -d ' ')
+          echo "## Bundle Size" >> $GITHUB_STEP_SUMMARY
+          echo "| File | Raw | Gzipped |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`ojs_wasm_sdk_bg.wasm\` | ${RAW_SIZE} bytes | ${GZIP_SIZE} bytes |" >> $GITHUB_STEP_SUMMARY
+          echo ""
+          echo "Raw:    ${RAW_SIZE} bytes"
+          echo "Gzip:   ${GZIP_SIZE} bytes"
+          # Fail if gzipped size exceeds 50KB
+          if [ "$GZIP_SIZE" -gt 51200 ]; then
+            echo "::error::WASM bundle exceeds 50KB gzipped (${GZIP_SIZE} bytes)"
+            exit 1
+          fi
+          echo "✅ Bundle size OK (under 50KB gzipped)"
+
+      - name: Upload pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ojs-wasm-pkg
+          path: pkg/
+          retention-days: 7
+
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run benchmarks
+        run: cargo bench
+
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'release'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build (release)
+        run: wasm-pack build --target web --release --out-dir pkg
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
