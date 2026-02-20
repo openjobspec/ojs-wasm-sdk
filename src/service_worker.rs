@@ -6,7 +6,9 @@
 //! completion events.
 
 use crate::error::{ErrorResponse, OjsWasmError, Result};
-use crate::types::{BatchRequest, BatchResponse, EnqueueRequest, JobResponse};
+use crate::types::{
+    BatchRequest, BatchResponse, EnqueueRequest, JobResponse, WorkflowResponse,
+};
 use js_sys::{Function, Object, Promise, Reflect};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -148,7 +150,21 @@ impl ServiceWorkerClient {
         job_type: &str,
         args: JsValue,
     ) -> std::result::Result<JsValue, JsValue> {
-        self.enqueue_inner(job_type, args)
+        self.enqueue_inner(job_type, args, None)
+            .await
+            .map_err(JsValue::from)
+    }
+
+    /// Enqueue a single job with options.
+    pub async fn enqueue_with_options(
+        &self,
+        job_type: &str,
+        args: JsValue,
+        options: JsValue,
+    ) -> std::result::Result<JsValue, JsValue> {
+        let opts: crate::types::EnqueueOptions = serde_wasm_bindgen::from_value(options)
+            .map_err(|e| JsValue::from_str(&format!("invalid options: {}", e)))?;
+        self.enqueue_inner(job_type, args, Some(opts))
             .await
             .map_err(JsValue::from)
     }
@@ -171,6 +187,26 @@ impl ServiceWorkerClient {
     /// Cancel a job by ID.
     pub async fn cancel_job(&self, id: &str) -> std::result::Result<JsValue, JsValue> {
         self.cancel_job_inner(id).await.map_err(JsValue::from)
+    }
+
+    /// Create and start a workflow.
+    pub async fn workflow(
+        &self,
+        definition: JsValue,
+    ) -> std::result::Result<JsValue, JsValue> {
+        self.workflow_inner(definition)
+            .await
+            .map_err(JsValue::from)
+    }
+
+    /// Get the status of a workflow by ID.
+    pub async fn get_workflow(
+        &self,
+        workflow_id: &str,
+    ) -> std::result::Result<JsValue, JsValue> {
+        self.get_workflow_inner(workflow_id)
+            .await
+            .map_err(JsValue::from)
     }
 
     /// Health check.
@@ -250,13 +286,19 @@ impl ServiceWorkerClient {
 // ---------------------------------------------------------------------------
 
 impl ServiceWorkerClient {
-    async fn enqueue_inner(&self, job_type: &str, args: JsValue) -> Result<JsValue> {
+    async fn enqueue_inner(
+        &self,
+        job_type: &str,
+        args: JsValue,
+        options: Option<crate::types::EnqueueOptions>,
+    ) -> Result<JsValue> {
         let args_value: serde_json::Value = serde_wasm_bindgen::from_value(args)
             .map_err(|e| OjsWasmError::Serialization(e.to_string()))?;
 
         let req = EnqueueRequest {
             job_type: job_type.to_string(),
             args: args_value,
+            options,
         };
 
         let body = serde_json::to_string(&req)?;
@@ -274,6 +316,8 @@ impl ServiceWorkerClient {
             #[serde(rename = "type")]
             job_type: String,
             args: serde_json::Value,
+            #[serde(default)]
+            options: Option<crate::types::EnqueueOptions>,
         }
 
         let js_jobs: Vec<JsJob> = serde_wasm_bindgen::from_value(jobs)
@@ -285,6 +329,7 @@ impl ServiceWorkerClient {
                 .map(|j| EnqueueRequest {
                     job_type: j.job_type,
                     args: j.args,
+                    options: j.options,
                 })
                 .collect(),
         };
@@ -313,6 +358,28 @@ impl ServiceWorkerClient {
         let resp: JobResponse = serde_json::from_str(&resp_text)?;
 
         serde_wasm_bindgen::to_value(&resp.job)
+            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+    }
+
+    async fn workflow_inner(&self, definition: JsValue) -> Result<JsValue> {
+        let wire: serde_json::Value = serde_wasm_bindgen::from_value(definition)
+            .map_err(|e| OjsWasmError::Serialization(e.to_string()))?;
+
+        let body = serde_json::to_string(&wire)?;
+        let url = format!("{}/workflows", self.base_url);
+        let resp_text = sw_post(&url, &body).await?;
+        let resp: WorkflowResponse = serde_json::from_str(&resp_text)?;
+
+        serde_wasm_bindgen::to_value(&resp)
+            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+    }
+
+    async fn get_workflow_inner(&self, workflow_id: &str) -> Result<JsValue> {
+        let url = format!("{}/workflows/{}", self.base_url, workflow_id);
+        let resp_text = sw_get(&url).await?;
+        let resp: WorkflowResponse = serde_json::from_str(&resp_text)?;
+
+        serde_wasm_bindgen::to_value(&resp)
             .map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
 
@@ -396,6 +463,7 @@ impl ServiceWorkerClient {
         let req = EnqueueRequest {
             job_type: pending.job_type,
             args: pending.args,
+            options: None,
         };
         let body = serde_json::to_string(&req)?;
         let url = format!("{}/jobs", self.base_url);
