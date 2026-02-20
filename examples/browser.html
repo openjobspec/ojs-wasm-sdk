@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OJS WASM SDK - Browser Example</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #1a1a1a;
+      background: #fafafa;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    p.subtitle { color: #666; margin-top: 0; }
+    .card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+    input, select, textarea {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      margin-bottom: 0.75rem;
+    }
+    textarea { font-family: monospace; resize: vertical; }
+    button {
+      background: #0066ff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 0.6rem 1.2rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      margin-right: 0.5rem;
+    }
+    button:hover { background: #0052cc; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary {
+      background: #fff;
+      color: #333;
+      border: 1px solid #ccc;
+    }
+    button.secondary:hover { background: #f5f5f5; }
+    #output {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.8rem;
+      padding: 1rem;
+      border-radius: 8px;
+      max-height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .status { font-size: 0.85rem; padding: 0.3rem 0.6rem; border-radius: 4px; }
+    .status.ok { background: #d4edda; color: #155724; }
+    .status.err { background: #f8d7da; color: #721c24; }
+    .status.loading { background: #fff3cd; color: #856404; }
+  </style>
+</head>
+<body>
+  <h1>OJS WASM SDK - Browser Demo</h1>
+  <p class="subtitle">Enqueue background jobs from the browser using WebAssembly.</p>
+
+  <!-- Server config -->
+  <div class="card">
+    <label for="server-url">OJS Server URL</label>
+    <input id="server-url" type="url" value="http://localhost:8080" />
+    <button id="btn-health" onclick="checkHealth()">Check Health</button>
+    <span id="health-status"></span>
+  </div>
+
+  <!-- Enqueue form -->
+  <div class="card">
+    <h3 style="margin-top:0">Enqueue a Job</h3>
+    <label for="job-type">Job Type</label>
+    <input id="job-type" type="text" value="email.send" placeholder="e.g. email.send" />
+
+    <label for="job-args">Args (JSON array)</label>
+    <textarea id="job-args" rows="2">["user@example.com", "Welcome!"]</textarea>
+
+    <label for="job-queue">Queue (optional)</label>
+    <input id="job-queue" type="text" placeholder="default" />
+
+    <label for="job-priority">Priority (optional)</label>
+    <input id="job-priority" type="number" placeholder="0" />
+
+    <button id="btn-enqueue" onclick="enqueueJob()">Enqueue Job</button>
+  </div>
+
+  <!-- Get job -->
+  <div class="card">
+    <h3 style="margin-top:0">Lookup / Cancel Job</h3>
+    <label for="job-id">Job ID</label>
+    <input id="job-id" type="text" placeholder="UUIDv7" />
+    <button onclick="getJob()">Get Job</button>
+    <button class="secondary" onclick="cancelJob()">Cancel Job</button>
+  </div>
+
+  <!-- Workflow -->
+  <div class="card">
+    <h3 style="margin-top:0">Create Workflow</h3>
+    <label for="wf-type">Workflow Type</label>
+    <select id="wf-type">
+      <option value="chain">Chain (sequential)</option>
+      <option value="group">Group (parallel)</option>
+    </select>
+
+    <label for="wf-steps">Steps (JSON array of {type, args})</label>
+    <textarea id="wf-steps" rows="4">[
+  { "type": "data.fetch", "args": ["https://api.example.com/data"] },
+  { "type": "data.transform", "args": ["csv"] },
+  { "type": "data.load", "args": ["warehouse"] }
+]</textarea>
+    <button onclick="createWorkflow()">Create Workflow</button>
+  </div>
+
+  <!-- Output log -->
+  <div id="output"></div>
+
+  <!--
+    IMPORTANT: Before running this example, build the WASM package:
+      cd ojs-wasm-sdk && wasm-pack build - -target web
+    Then serve this directory with any HTTP server:
+      npx serve .
+  -->
+  <script type="module">
+    // Import from the local wasm-pack output
+    import init, {
+      OJSClient,
+      chain,
+      group,
+    } from '../pkg/ojs_wasm_sdk.js';
+
+    const output = document.getElementById('output');
+    let client = null;
+
+    function log(msg) {
+      const ts = new Date().toLocaleTimeString();
+      output.textContent += `[${ts}] ${msg}\n`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function logJson(label, obj) {
+      log(`${label}:\n${JSON.stringify(obj, null, 2)}`);
+    }
+
+    // Initialize WASM
+    async function start() {
+      try {
+        await init();
+        log('WASM module initialized.');
+        const url = document.getElementById('server-url').value;
+        client = new OJSClient(url);
+        log(`Client created for ${url}`);
+      } catch (e) {
+        log(`Failed to initialize WASM: ${e}`);
+      }
+    }
+
+    // Expose functions to onclick handlers
+    window.checkHealth = async function () {
+      const statusEl = document.getElementById('health-status');
+      statusEl.className = 'status loading';
+      statusEl.textContent = 'checking...';
+      try {
+        const url = document.getElementById('server-url').value;
+        client = new OJSClient(url);
+        const health = await client.health();
+        statusEl.className = 'status ok';
+        statusEl.textContent = `OK (${health.status})`;
+        logJson('Health', health);
+      } catch (e) {
+        statusEl.className = 'status err';
+        statusEl.textContent = 'Error';
+        log(`Health check failed: ${e}`);
+      }
+    };
+
+    window.enqueueJob = async function () {
+      const jobType = document.getElementById('job-type').value;
+      const argsRaw = document.getElementById('job-args').value;
+      const queue = document.getElementById('job-queue').value;
+      const priority = document.getElementById('job-priority').value;
+
+      let args;
+      try {
+        args = JSON.parse(argsRaw);
+      } catch (e) {
+        log(`Invalid JSON in args: ${e.message}`);
+        return;
+      }
+
+      try {
+        let job;
+        if (queue || priority) {
+          const options = {};
+          if (queue) options.queue = queue;
+          if (priority) options.priority = parseInt(priority, 10);
+          job = await client.enqueue_with_options(jobType, args, options);
+        } else {
+          job = await client.enqueue(jobType, args);
+        }
+        logJson('Enqueued', job);
+        document.getElementById('job-id').value = job.id;
+      } catch (e) {
+        log(`Enqueue failed: ${e}`);
+      }
+    };
+
+    window.getJob = async function () {
+      const id = document.getElementById('job-id').value;
+      if (!id) { log('Enter a job ID first.'); return; }
+      try {
+        const job = await client.get_job(id);
+        logJson('Job', job);
+      } catch (e) {
+        log(`Get job failed: ${e}`);
+      }
+    };
+
+    window.cancelJob = async function () {
+      const id = document.getElementById('job-id').value;
+      if (!id) { log('Enter a job ID first.'); return; }
+      try {
+        const job = await client.cancel_job(id);
+        logJson('Cancelled', job);
+      } catch (e) {
+        log(`Cancel failed: ${e}`);
+      }
+    };
+
+    window.createWorkflow = async function () {
+      const wfType = document.getElementById('wf-type').value;
+      const stepsRaw = document.getElementById('wf-steps').value;
+      let steps;
+      try {
+        steps = JSON.parse(stepsRaw);
+      } catch (e) {
+        log(`Invalid JSON in steps: ${e.message}`);
+        return;
+      }
+      try {
+        const definition = wfType === 'chain' ? chain(steps) : group(steps);
+        const status = await client.workflow(definition);
+        logJson('Workflow created', status);
+      } catch (e) {
+        log(`Workflow failed: ${e}`);
+      }
+    };
+
+    start();
+  </script>
+</body>
+</html>
