@@ -1,0 +1,40 @@
+{
+  "name": "@openjobspec/wasm",
+  "version": "0.1.0",
+  "description": "OJS (Open Job Spec) client SDK compiled to WebAssembly — works in browsers, Service Workers, and edge runtimes",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openjobspec/ojs-wasm-sdk"
+  },
+  "homepage": "https://openjobspec.org",
+  "keywords": [
+    "jobs",
+    "queue",
+    "background-jobs",
+    "wasm",
+    "webassembly",
+    "ojs",
+    "open-job-spec",
+    "cloudflare-workers",
+    "deno",
+    "edge"
+  ],
+  "type": "module",
+  "files": [
+    "pkg/ojs_wasm_sdk_bg.wasm",
+    "pkg/ojs_wasm_sdk.js",
+    "pkg/ojs_wasm_sdk.d.ts",
+    "pkg/package.json"
+  ],
+  "scripts": {
+    "build": "wasm-pack build --target web --out-dir pkg",
+    "build:bundler": "wasm-pack build --target bundler --out-dir pkg-bundler",
+    "build:nodejs": "wasm-pack build --target nodejs --out-dir pkg-node",
+    "clean": "rm -rf pkg pkg-bundler pkg-node",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "wasm-pack": "^0.13.0"
+  }
+}

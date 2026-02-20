@@ -28,9 +28,20 @@ web-sys = { version = "0.3", features = [
     "Window",
 ] }
 
+[features]
+default = []
+edge_cloudflare = []
+edge_deno = []
+edge_vercel = []
+edge_all = ["edge_cloudflare", "edge_deno", "edge_vercel"]
+
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
 
 [profile.release]
 opt-level = "s"
 lto = true
+
+[[bench]]
+name = "serialization"
+harness = false
