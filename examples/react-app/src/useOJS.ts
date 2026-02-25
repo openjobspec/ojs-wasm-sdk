@@ -62,3 +62,4 @@ export function useOJS(serverUrl: string) {
 
   return { ready, error, enqueue, getJob, cancelJob, health };
 }
+
