@@ -403,3 +403,4 @@ export class VercelEdgeClient {
     args: unknown[],
   ): void;
 }
+
