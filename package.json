@@ -1,6 +1,6 @@
 {
   "name": "@openjobspec/wasm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OJS (Open Job Spec) client SDK compiled to WebAssembly — works in browsers, Service Workers, and edge runtimes",
   "license": "Apache-2.0",
   "repository": {
