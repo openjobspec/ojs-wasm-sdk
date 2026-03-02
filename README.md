@@ -4,7 +4,9 @@
 
 A WebAssembly OJS (Open Job Spec) client for browsers and edge runtimes — compiled from Rust via `wasm-bindgen`.
 
-> **Status: Experimental** — This SDK is functional but has not been battle-tested in production. We welcome feedback and contributions.
+> **Community-maintained:** This SDK is maintained by community contributors.
+> It is not part of the official 7-SDK parity matrix (Go, TS, Python, Java, Rust, Ruby, .NET).
+> PRs and issues are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) to get involved.
 
 ## Overview
 
