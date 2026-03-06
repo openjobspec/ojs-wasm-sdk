@@ -8,7 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@openjobspec/wasm": "^0.1.0",
+    "@openjobspec/wasm": "^0.2.0",
     "@vercel/functions": "^1.0.0",
     "next": "^14.0.0",
     "react": "^18.3.0",
