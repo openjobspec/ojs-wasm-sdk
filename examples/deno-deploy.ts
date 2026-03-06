@@ -77,3 +77,4 @@ Deno.serve({ port: 3000 }, async (req: Request) => {
 
   return new Response('OJS Deno Deploy example', { status: 200 });
 });
+
