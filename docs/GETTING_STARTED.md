@@ -137,3 +137,4 @@ const client = VercelEdgeClient.from_env();
 - [Edge Runtime Guide](./EDGE_GUIDE.md) — Cloudflare Workers, Deno Deploy, Vercel Edge
 - [API Reference](./API_REFERENCE.md) — Complete API documentation
 - [Examples](../examples/README.md) — Working code examples
+
