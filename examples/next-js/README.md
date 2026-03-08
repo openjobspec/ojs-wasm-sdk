@@ -66,4 +66,3 @@ curl -X POST http://localhost:3000/api/ojs \
 ## Architecture
 
 The API route runs as a **Vercel Edge Function** — the WASM module executes in V8 isolates with sub-millisecond cold starts. The route can be deployed to Vercel or run locally with `next dev`.
-
