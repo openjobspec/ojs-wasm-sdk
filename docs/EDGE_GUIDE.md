@@ -268,3 +268,4 @@ const jobs = await client.enqueue_batch([
   { type: 'email.send', args: ['c@example.com', 'Hello'] },
 ]);
 ```
+
