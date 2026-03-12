@@ -74,8 +74,41 @@ pub async fn get(url: &str) -> Result<String> {
     execute(request).await
 }
 
+/// Send a PUT request with a JSON body.
+pub async fn put(url: &str, body: &str) -> Result<String> {
+    let request = build_request("PUT", url, Some(body.to_string()))?;
+    execute(request).await
+}
+
 /// Send a DELETE request.
 pub async fn delete(url: &str) -> Result<String> {
     let request = build_request("DELETE", url, None)?;
     execute(request).await
+}
+
+/// Send a GET request and return `(status_code, body)`.
+///
+/// Unlike [`get`], this does NOT treat non-2xx responses as errors.
+pub async fn get_with_status(url: &str) -> Result<(u16, String)> {
+    let request = build_request("GET", url, None)?;
+    execute_with_status(request).await
+}
+
+async fn execute_with_status(request: Request) -> Result<(u16, String)> {
+    let resp_value = JsFuture::from(window().fetch_with_request(&request))
+        .await
+        .map_err(OjsWasmError::from)?;
+
+    let resp: Response = resp_value
+        .dyn_into()
+        .map_err(|_| OjsWasmError::Transport("response is not a Response".into()))?;
+
+    let status = resp.status();
+    let text = JsFuture::from(resp.text().map_err(OjsWasmError::from)?)
+        .await
+        .map_err(OjsWasmError::from)?;
+
+    let body = text.as_string().unwrap_or_default();
+
+    Ok((status, body))
 }

@@ -13,6 +13,8 @@ pub enum OjsWasmError {
     Serialization(String),
     /// JavaScript interop error.
     Js(String),
+    /// Client-side validation error.
+    Validation(String),
 }
 
 impl fmt::Display for OjsWasmError {
@@ -22,6 +24,7 @@ impl fmt::Display for OjsWasmError {
             OjsWasmError::Transport(e) => write!(f, "transport error: {}", e),
             OjsWasmError::Serialization(e) => write!(f, "serialization error: {}", e),
             OjsWasmError::Js(e) => write!(f, "js error: {}", e),
+            OjsWasmError::Validation(e) => write!(f, "validation error: {}", e),
         }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "ojs-wasm-sdk"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "OJS (Open Job Spec) client SDK compiled to WebAssembly"
 license = "Apache-2.0"
@@ -26,7 +26,12 @@ web-sys = { version = "0.3", features = [
     "RequestMode",
     "Response",
     "Window",
+    "EventSource",
+    "MessageEvent",
+    "Event",
 ] }
+aes-gcm = "0.10"
+getrandom = { version = "0.2", features = ["js"] }
 
 [features]
 default = []

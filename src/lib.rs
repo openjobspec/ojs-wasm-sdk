@@ -13,6 +13,11 @@
 //! - [`middleware`] -- Request/response middleware chain.
 //! - [`retry`] -- Retry policy configuration.
 //! - [`queue`] -- Queue management operations.
+//! - [`encryption`] -- AES-256-GCM encryption for job arguments.
+//! - [`durable`] -- Durable execution with checkpoint-based crash recovery.
+//! - [`subscribe`] -- Server-Sent Events (SSE) for real-time job events.
+//! - [`testing`] -- Fake store and assertions for unit testing.
+//! - [`schema`] -- Client-side schema validation.
 
 pub mod edge;
 pub mod error;
@@ -23,6 +28,13 @@ pub mod service_worker;
 pub mod transport;
 pub mod types;
 pub mod workflow;
+
+// New modules for feature parity with other OJS SDKs
+pub mod encryption;
+pub mod durable;
+pub mod subscribe;
+pub mod testing;
+pub mod schema;
 
 use error::{OjsWasmError, Result};
 use types::{
@@ -196,6 +208,13 @@ impl OJSClient {
         args: JsValue,
         options: Option<types::EnqueueOptions>,
     ) -> Result<JsValue> {
+        validate_job_type_wasm(job_type)?;
+        if let Some(ref opts) = options {
+            if let Some(ref q) = opts.queue {
+                validate_queue_name_wasm(q)?;
+            }
+        }
+
         let args_value: serde_json::Value = serde_wasm_bindgen::from_value(args)
             .map_err(|e| OjsWasmError::Serialization(e.to_string()))?;
 
@@ -295,4 +314,57 @@ impl OJSClient {
         serde_wasm_bindgen::to_value(&resp)
             .map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
+}
+
+fn validate_job_type_wasm(job_type: &str) -> Result<()> {
+    if job_type.is_empty() {
+        return Err(OjsWasmError::Validation("job type must not be empty".into()));
+    }
+    if job_type.len() > 255 {
+        return Err(OjsWasmError::Validation(format!(
+            "job type must not exceed 255 characters, got {}",
+            job_type.len()
+        )));
+    }
+    let valid = job_type.split('.').all(|seg| {
+        !seg.is_empty()
+            && seg.starts_with(|c: char| c.is_ascii_lowercase())
+            && seg.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    });
+    if !valid {
+        return Err(OjsWasmError::Validation(format!(
+            "invalid job type {:?}: each segment must match [a-z][a-z0-9_]*",
+            job_type
+        )));
+    }
+    Ok(())
+}
+
+fn validate_queue_name_wasm(queue: &str) -> Result<()> {
+    if queue.is_empty() {
+        return Err(OjsWasmError::Validation("queue name must not be empty".into()));
+    }
+    if queue.len() > 128 {
+        return Err(OjsWasmError::Validation(format!(
+            "queue name must not exceed 128 characters, got {}",
+            queue.len()
+        )));
+    }
+    let first = queue.as_bytes()[0];
+    if !(first.is_ascii_lowercase() || first.is_ascii_digit()) {
+        return Err(OjsWasmError::Validation(format!(
+            "invalid queue name {:?}: must start with lowercase alphanumeric",
+            queue
+        )));
+    }
+    let valid = queue
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.');
+    if !valid {
+        return Err(OjsWasmError::Validation(format!(
+            "invalid queue name {:?}: must contain only lowercase alphanumeric, hyphens, and dots",
+            queue
+        )));
+    }
+    Ok(())
 }
