@@ -1,4 +1,5 @@
 # OJS WASM SDK
+[![Stability: experimental](https://img.shields.io/badge/stability-experimental-orange.svg)](https://github.com/openjobspec/openjobspec/blob/main/STABILITY.md)
 
 [![CI](https://github.com/openjobspec/ojs-wasm-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/openjobspec/ojs-wasm-sdk/actions/workflows/ci.yml)
 
