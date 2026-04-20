@@ -1,6 +1,6 @@
 [package]
 name = "ojs-wasm-sdk"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "OJS (Open Job Spec) client SDK compiled to WebAssembly"
 license = "Apache-2.0"
