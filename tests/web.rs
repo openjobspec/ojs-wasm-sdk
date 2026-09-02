@@ -732,3 +732,25 @@ fn test_retry_policy_linear() {
     let bt = js_sys::Reflect::get(&backoff, &"type".into()).unwrap();
     assert_eq!(bt.as_string().unwrap(), "linear");
 }
+
+// ===========================================================================
+// Encryption — malformed Unicode/hex keys return errors rather than trapping
+// ===========================================================================
+
+#[wasm_bindgen_test]
+#[cfg(feature = "encryption")]
+fn test_encryption_rejects_non_ascii_and_invalid_hex_without_trapping() {
+    use ojs_wasm_sdk::encryption::EncryptionCodec;
+
+    let codec = EncryptionCodec::new();
+    for key in [
+        "é00000000000000000000000000000000000000000000000000000000000000",
+        "gg00000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000💥",
+    ] {
+        assert!(
+            codec.encrypt(r#"["secret"]"#, key).is_err(),
+            "malformed key {key:?} must return an error"
+        );
+    }
+}

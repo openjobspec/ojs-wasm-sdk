@@ -59,21 +59,8 @@ impl EncryptionCodec {
     ///
     /// Returns a base64-encoded string of `nonce (12 bytes) || ciphertext`.
     pub fn encrypt(&self, plaintext: &str, key_hex: &str) -> Result<String, JsValue> {
-        let key = hex_to_bytes(key_hex)
-            .map_err(|e| JsValue::from_str(&format!("invalid key hex: {}", e)))?;
-        if key.len() != 32 {
-            return Err(JsValue::from_str("key must be 32 bytes (64 hex chars)"));
-        }
-
-        let nonce = generate_nonce();
-        let ciphertext = aes256_gcm_encrypt(plaintext.as_bytes(), &key, &nonce)
-            .map_err(|e| JsValue::from_str(&format!("encryption failed: {}", e)))?;
-
-        let mut out = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
-        out.extend_from_slice(&nonce);
-        out.extend_from_slice(&ciphertext);
-
-        Ok(base64_encode(&out))
+        encrypt_with_nonce_generator(plaintext, key_hex, generate_nonce)
+            .map_err(|error| JsValue::from_str(&error))
     }
 
     /// Decrypt a base64-encoded ciphertext produced by [`encrypt`](Self::encrypt).
@@ -152,10 +139,41 @@ pub fn decrypt_args(encrypted_args: &str, key_hex: &str) -> Result<String, JsVal
 // Pure-Rust AES-256-GCM implementation for WASM
 // ---------------------------------------------------------------------------
 
-fn generate_nonce() -> [u8; NONCE_SIZE] {
+fn generate_nonce() -> Result<[u8; NONCE_SIZE], String> {
+    generate_nonce_with(getrandom::getrandom)
+}
+
+fn generate_nonce_with<F, E>(fill: F) -> Result<[u8; NONCE_SIZE], String>
+where
+    F: FnOnce(&mut [u8]) -> std::result::Result<(), E>,
+    E: std::fmt::Display,
+{
     let mut nonce = [0u8; NONCE_SIZE];
-    getrandom::getrandom(&mut nonce).expect("getrandom failed");
-    nonce
+    fill(&mut nonce).map_err(|e| e.to_string())?;
+    Ok(nonce)
+}
+
+fn encrypt_with_nonce_generator<F>(
+    plaintext: &str,
+    key_hex: &str,
+    generate: F,
+) -> Result<String, String>
+where
+    F: FnOnce() -> Result<[u8; NONCE_SIZE], String>,
+{
+    let key = hex_to_bytes(key_hex).map_err(|error| format!("invalid key hex: {}", error))?;
+    if key.len() != 32 {
+        return Err("key must be 32 bytes (64 hex chars)".into());
+    }
+
+    let nonce = generate().map_err(|error| format!("entropy unavailable: {}", error))?;
+    let ciphertext = aes256_gcm_encrypt(plaintext.as_bytes(), &key, &nonce)
+        .map_err(|error| format!("encryption failed: {}", error))?;
+
+    let mut output = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
+    output.extend_from_slice(&nonce);
+    output.extend_from_slice(&ciphertext);
+    Ok(base64_encode(&output))
 }
 
 fn aes256_gcm_encrypt(
@@ -197,16 +215,37 @@ fn aes256_gcm_decrypt(ciphertext: &[u8], key: &[u8], nonce: &[u8]) -> Result<Vec
 // ---------------------------------------------------------------------------
 
 fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
-    if hex.len() % 2 != 0 {
+    let bytes = hex.as_bytes();
+    if bytes.len() % 2 != 0 {
         return Err("odd-length hex string".into());
     }
-    (0..hex.len())
-        .step_by(2)
-        .map(|i| {
-            u8::from_str_radix(&hex[i..i + 2], 16)
-                .map_err(|e| format!("invalid hex at position {}: {}", i, e))
+
+    bytes
+        .chunks_exact(2)
+        .enumerate()
+        .map(|(index, pair)| {
+            let position = index * 2;
+            let high = hex_nibble(pair[0], position)?;
+            let low = hex_nibble(pair[1], position + 1)?;
+            Ok((high << 4) | low)
         })
         .collect()
+}
+
+fn hex_nibble(byte: u8, position: usize) -> Result<u8, String> {
+    match byte {
+        b'0'..=b'9' => Ok(byte - b'0'),
+        b'a'..=b'f' => Ok(byte - b'a' + 10),
+        b'A'..=b'F' => Ok(byte - b'A' + 10),
+        _ if byte.is_ascii() => Err(format!(
+            "invalid hex character '{}' at byte position {}",
+            byte as char, position
+        )),
+        _ => Err(format!(
+            "non-ASCII hex character at byte position {}",
+            position
+        )),
+    }
 }
 
 fn base64_encode(data: &[u8]) -> String {
@@ -292,6 +331,28 @@ mod tests {
     fn test_hex_to_bytes_invalid() {
         assert!(hex_to_bytes("xyz").is_err());
         assert!(hex_to_bytes("abc").is_err()); // odd length
+        assert!(hex_to_bytes("gg").is_err());
+    }
+
+    #[test]
+    fn test_hex_to_bytes_non_ascii_never_panics() {
+        for value in ["é0", "0é", "00💥", "１２"] {
+            assert!(hex_to_bytes(value).is_err(), "{value:?} must be rejected");
+        }
+    }
+
+    #[test]
+    fn test_nonce_entropy_failure_is_returned() {
+        let result = generate_nonce_with(|_| Err("entropy source failed"));
+        assert_eq!(result.unwrap_err(), "entropy source failed");
+
+        let result = encrypt_with_nonce_generator("secret", TEST_KEY_HEX, || {
+            Err("entropy source failed".into())
+        });
+        assert_eq!(
+            result.unwrap_err(),
+            "entropy unavailable: entropy source failed"
+        );
     }
 
     #[test]
@@ -343,7 +404,7 @@ mod tests {
     fn test_full_encrypt_decrypt_flow() {
         let key = hex_to_bytes(TEST_KEY_HEX).unwrap();
         let plaintext = r#"["sensitive", {"ssn": "123-45-6789"}]"#;
-        let nonce = generate_nonce();
+        let nonce = generate_nonce().unwrap();
 
         let ciphertext = aes256_gcm_encrypt(plaintext.as_bytes(), &key, &nonce).unwrap();
 
@@ -361,8 +422,8 @@ mod tests {
 
     #[test]
     fn test_unique_nonces() {
-        let n1 = generate_nonce();
-        let n2 = generate_nonce();
+        let n1 = generate_nonce().unwrap();
+        let n2 = generate_nonce().unwrap();
         assert_ne!(n1, n2);
     }
 }
