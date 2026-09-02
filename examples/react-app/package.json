@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@openjobspec/wasm": "^0.2.0",
+    "@openjobspec/wasm": "^0.5.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },
@@ -21,4 +21,3 @@
     "vite": "^5.0.0"
   }
 }
-
