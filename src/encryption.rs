@@ -214,6 +214,9 @@ fn aes256_gcm_decrypt(ciphertext: &[u8], key: &[u8], nonce: &[u8]) -> Result<Vec
 // Encoding utilities (no external deps needed)
 // ---------------------------------------------------------------------------
 
+// MSRV note: `usize::is_multiple_of` is only stable since Rust 1.87, above this
+// crate's documented MSRV (1.75), so the modulo form is kept deliberately.
+#[allow(clippy::manual_is_multiple_of)]
 fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
     let bytes = hex.as_bytes();
     if bytes.len() % 2 != 0 {
@@ -250,7 +253,7 @@ fn hex_nibble(byte: u8, position: usize) -> Result<u8, String> {
 
 fn base64_encode(data: &[u8]) -> String {
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
 
     for chunk in data.chunks(3) {
         let b0 = chunk[0] as u32;
@@ -276,6 +279,8 @@ fn base64_encode(data: &[u8]) -> String {
     result
 }
 
+// MSRV note: see `hex_to_bytes` — `is_multiple_of` requires Rust 1.87 > MSRV 1.75.
+#[allow(clippy::manual_is_multiple_of)]
 fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
     fn char_to_val(c: u8) -> Result<u8, String> {
         match c {

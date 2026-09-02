@@ -2,6 +2,7 @@
 name = "ojs-wasm-sdk"
 version = "0.4.0"
 edition = "2021"
+rust-version = "1.75"
 description = "OJS (Open Job Spec) client SDK compiled to WebAssembly"
 license = "Apache-2.0"
 repository = "https://github.com/openjobspec/ojs-wasm-sdk"
@@ -13,13 +14,13 @@ readme = "README.md"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
+wasm-bindgen = "=0.2.117"
+wasm-bindgen-futures = "=0.4.67"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde-wasm-bindgen = "0.6"
-js-sys = "0.3"
-web-sys = { version = "0.3", features = [
+js-sys = "=0.3.94"
+web-sys = { version = "=0.3.94", features = [
     "Headers",
     "Request",
     "RequestInit",
@@ -44,7 +45,7 @@ encryption = ["dep:aes-gcm", "dep:getrandom"]
 schema = []
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3"
+wasm-bindgen-test = "=0.3.67"
 
 [profile.release]
 opt-level = "s"
