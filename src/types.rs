@@ -49,6 +49,31 @@ pub struct EnqueueRequest {
     pub options: Option<EnqueueOptions>,
 }
 
+/// JS-side shape accepted by every client's `enqueue_batch` — an array of
+/// `{ type, args, options? }` objects.
+///
+/// Kept in the serialization actor so the batch input wire-shape has a single
+/// definition instead of being copy-pasted per transport. Converts into an
+/// [`EnqueueRequest`] for sending.
+#[derive(Debug, Deserialize)]
+pub(crate) struct BatchJobInput {
+    #[serde(rename = "type")]
+    pub job_type: String,
+    pub args: serde_json::Value,
+    #[serde(default)]
+    pub options: Option<EnqueueOptions>,
+}
+
+impl From<BatchJobInput> for EnqueueRequest {
+    fn from(input: BatchJobInput) -> Self {
+        EnqueueRequest {
+            job_type: input.job_type,
+            args: input.args,
+            options: input.options,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Batch request (POST /ojs/v1/jobs/batch)
 // ---------------------------------------------------------------------------

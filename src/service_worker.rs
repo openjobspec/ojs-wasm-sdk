@@ -6,7 +6,9 @@
 //! completion events.
 
 use crate::error::{ErrorResponse, OjsWasmError, Result};
-use crate::types::{BatchRequest, BatchResponse, EnqueueRequest, JobResponse, WorkflowResponse};
+use crate::types::{
+    BatchJobInput, BatchRequest, BatchResponse, EnqueueRequest, JobResponse, WorkflowResponse,
+};
 use js_sys::{Function, Object, Promise, Reflect};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -291,27 +293,11 @@ impl ServiceWorkerClient {
     }
 
     async fn enqueue_batch_inner(&self, jobs: JsValue) -> Result<JsValue> {
-        #[derive(Deserialize)]
-        struct JsJob {
-            #[serde(rename = "type")]
-            job_type: String,
-            args: serde_json::Value,
-            #[serde(default)]
-            options: Option<crate::types::EnqueueOptions>,
-        }
-
-        let js_jobs: Vec<JsJob> = serde_wasm_bindgen::from_value(jobs)
+        let js_jobs: Vec<BatchJobInput> = serde_wasm_bindgen::from_value(jobs)
             .map_err(|e| OjsWasmError::Serialization(e.to_string()))?;
 
         let batch = BatchRequest {
-            jobs: js_jobs
-                .into_iter()
-                .map(|j| EnqueueRequest {
-                    job_type: j.job_type,
-                    args: j.args,
-                    options: j.options,
-                })
-                .collect(),
+            jobs: js_jobs.into_iter().map(EnqueueRequest::from).collect(),
         };
 
         let body = serde_json::to_string(&batch)?;
