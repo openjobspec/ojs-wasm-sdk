@@ -29,7 +29,9 @@ fn test_schema_registration() {
 #[test]
 fn test_schema_unregistration() {
     let mut validator = SchemaValidator::new();
-    validator.register("email.send", r#"{"type": "object"}"#).unwrap();
+    validator
+        .register("email.send", r#"{"type": "object"}"#)
+        .unwrap();
     assert!(validator.has_schema("email.send"));
 
     assert!(validator.unregister("email.send"));

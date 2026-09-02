@@ -121,11 +121,7 @@ pub fn encrypt_args(args_json: &str, key_hex: &str, key_id: &str) -> Result<JsVa
     let meta = js_sys::Object::new();
     let encodings = js_sys::Array::new();
     encodings.push(&JsValue::from_str(ENCODING_BINARY_ENCRYPTED));
-    js_sys::Reflect::set(
-        &meta,
-        &JsValue::from_str(META_CODEC_ENCODINGS),
-        &encodings,
-    )?;
+    js_sys::Reflect::set(&meta, &JsValue::from_str(META_CODEC_ENCODINGS), &encodings)?;
     js_sys::Reflect::set(
         &meta,
         &JsValue::from_str(META_CODEC_KEY_ID),
@@ -173,11 +169,7 @@ fn aes256_gcm_encrypt(
         .map_err(|e| format!("AES-GCM encrypt error: {}", e))
 }
 
-fn aes256_gcm_decrypt(
-    ciphertext: &[u8],
-    key: &[u8],
-    nonce: &[u8],
-) -> Result<Vec<u8>, String> {
+fn aes256_gcm_decrypt(ciphertext: &[u8], key: &[u8], nonce: &[u8]) -> Result<Vec<u8>, String> {
     use aes_gcm::aead::{Aead, KeyInit};
     use aes_gcm::{Aes256Gcm, Key, Nonce};
 
@@ -333,7 +325,8 @@ mod tests {
     #[test]
     fn test_aes_wrong_key() {
         let key1 = hex_to_bytes(TEST_KEY_HEX).unwrap();
-        let key2 = hex_to_bytes("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210").unwrap();
+        let key2 = hex_to_bytes("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210")
+            .unwrap();
         let nonce = [2u8; NONCE_SIZE];
 
         let ciphertext = aes256_gcm_encrypt(b"secret", &key1, &nonce).unwrap();

@@ -43,10 +43,7 @@ impl From<serde_json::Error> for OjsWasmError {
 
 impl From<JsValue> for OjsWasmError {
     fn from(err: JsValue) -> Self {
-        OjsWasmError::Js(
-            err.as_string()
-                .unwrap_or_else(|| format!("{:?}", err)),
-        )
+        OjsWasmError::Js(err.as_string().unwrap_or_else(|| format!("{:?}", err)))
     }
 }
 

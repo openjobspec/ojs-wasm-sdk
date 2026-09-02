@@ -291,4 +291,3 @@ fn server_error_debug_format() {
     let debug = format!("{:?}", err);
     assert!(debug.contains("ServerError"));
 }
-

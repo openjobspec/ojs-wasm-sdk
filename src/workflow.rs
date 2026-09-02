@@ -57,9 +57,7 @@ pub fn chain(steps: JsValue) -> std::result::Result<JsValue, JsValue> {
         .map_err(|_| JsValue::from_str("chain() expects an array of steps"))?;
 
     if arr.length() == 0 {
-        return Err(JsValue::from_str(
-            "a chain must contain at least one step",
-        ));
+        return Err(JsValue::from_str("a chain must contain at least one step"));
     }
 
     let obj = Object::new();
@@ -80,9 +78,7 @@ pub fn group(jobs: JsValue) -> std::result::Result<JsValue, JsValue> {
         .map_err(|_| JsValue::from_str("group() expects an array of jobs"))?;
 
     if arr.length() == 0 {
-        return Err(JsValue::from_str(
-            "a group must contain at least one job",
-        ));
+        return Err(JsValue::from_str("a group must contain at least one job"));
     }
 
     let obj = Object::new();
@@ -105,9 +101,7 @@ pub fn batch(jobs: JsValue, callbacks: JsValue) -> std::result::Result<JsValue, 
         .map_err(|_| JsValue::from_str("batch() expects an array of jobs"))?;
 
     if arr.length() == 0 {
-        return Err(JsValue::from_str(
-            "a batch must contain at least one job",
-        ));
+        return Err(JsValue::from_str("a batch must contain at least one job"));
     }
 
     // Validate that callbacks has at least one key

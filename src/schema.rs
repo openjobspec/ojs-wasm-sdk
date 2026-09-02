@@ -98,7 +98,11 @@ fn make_result(valid: bool, errors: Vec<String>) -> Result<JsValue, JsValue> {
 }
 
 /// Basic JSON Schema validation (type checking, required fields, enum).
-fn validate_value(value: &serde_json::Value, schema: &serde_json::Value, path: &str) -> Vec<String> {
+fn validate_value(
+    value: &serde_json::Value,
+    schema: &serde_json::Value,
+    path: &str,
+) -> Vec<String> {
     let mut errors = Vec::new();
 
     if let Some(expected_type) = schema.get("type").and_then(|t| t.as_str()) {

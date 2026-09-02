@@ -6,9 +6,7 @@
 //! completion events.
 
 use crate::error::{ErrorResponse, OjsWasmError, Result};
-use crate::types::{
-    BatchRequest, BatchResponse, EnqueueRequest, JobResponse, WorkflowResponse,
-};
+use crate::types::{BatchRequest, BatchResponse, EnqueueRequest, JobResponse, WorkflowResponse};
 use js_sys::{Function, Object, Promise, Reflect};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -170,13 +168,8 @@ impl ServiceWorkerClient {
     }
 
     /// Enqueue multiple jobs in a single batch request.
-    pub async fn enqueue_batch(
-        &self,
-        jobs: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
-        self.enqueue_batch_inner(jobs)
-            .await
-            .map_err(JsValue::from)
+    pub async fn enqueue_batch(&self, jobs: JsValue) -> std::result::Result<JsValue, JsValue> {
+        self.enqueue_batch_inner(jobs).await.map_err(JsValue::from)
     }
 
     /// Get a job by ID.
@@ -190,20 +183,12 @@ impl ServiceWorkerClient {
     }
 
     /// Create and start a workflow.
-    pub async fn workflow(
-        &self,
-        definition: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
-        self.workflow_inner(definition)
-            .await
-            .map_err(JsValue::from)
+    pub async fn workflow(&self, definition: JsValue) -> std::result::Result<JsValue, JsValue> {
+        self.workflow_inner(definition).await.map_err(JsValue::from)
     }
 
     /// Get the status of a workflow by ID.
-    pub async fn get_workflow(
-        &self,
-        workflow_id: &str,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn get_workflow(&self, workflow_id: &str) -> std::result::Result<JsValue, JsValue> {
         self.get_workflow_inner(workflow_id)
             .await
             .map_err(JsValue::from)
@@ -246,13 +231,8 @@ impl ServiceWorkerClient {
     ///   }
     /// });
     /// ```
-    pub async fn process_sync(
-        &self,
-        tag: &str,
-    ) -> std::result::Result<JsValue, JsValue> {
-        self.process_sync_inner(tag)
-            .await
-            .map_err(JsValue::from)
+    pub async fn process_sync(&self, tag: &str) -> std::result::Result<JsValue, JsValue> {
+        self.process_sync_inner(tag).await.map_err(JsValue::from)
     }
 
     // -- Push Notification helpers ------------------------------------------
@@ -370,8 +350,7 @@ impl ServiceWorkerClient {
         let resp_text = sw_post(&url, &body).await?;
         let resp: WorkflowResponse = serde_json::from_str(&resp_text)?;
 
-        serde_wasm_bindgen::to_value(&resp)
-            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+        serde_wasm_bindgen::to_value(&resp).map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
 
     async fn get_workflow_inner(&self, workflow_id: &str) -> Result<JsValue> {
@@ -379,8 +358,7 @@ impl ServiceWorkerClient {
         let resp_text = sw_get(&url).await?;
         let resp: WorkflowResponse = serde_json::from_str(&resp_text)?;
 
-        serde_wasm_bindgen::to_value(&resp)
-            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+        serde_wasm_bindgen::to_value(&resp).map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
 
     async fn health_inner(&self) -> Result<JsValue> {
@@ -388,8 +366,7 @@ impl ServiceWorkerClient {
         let resp_text = sw_get(&url).await?;
         let resp: crate::types::HealthResponse = serde_json::from_str(&resp_text)?;
 
-        serde_wasm_bindgen::to_value(&resp)
-            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+        serde_wasm_bindgen::to_value(&resp).map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
 
     // -- Background Sync internals ------------------------------------------
@@ -435,7 +412,9 @@ impl ServiceWorkerClient {
                     .call1(&sync, &JsValue::from_str(&tag))
                     .map_err(OjsWasmError::from)?
                     .dyn_into()
-                    .map_err(|_| OjsWasmError::Js("sync.register did not return a Promise".into()))?;
+                    .map_err(|_| {
+                        OjsWasmError::Js("sync.register did not return a Promise".into())
+                    })?;
                 JsFuture::from(promise).await.map_err(OjsWasmError::from)?;
             }
         }
@@ -446,8 +425,8 @@ impl ServiceWorkerClient {
     async fn process_sync_inner(&self, tag: &str) -> Result<JsValue> {
         let storage = get_or_create_pending_storage()?;
 
-        let pending_val = Reflect::get(&storage, &JsValue::from_str(tag))
-            .map_err(OjsWasmError::from)?;
+        let pending_val =
+            Reflect::get(&storage, &JsValue::from_str(tag)).map_err(OjsWasmError::from)?;
 
         if pending_val.is_undefined() {
             return Err(OjsWasmError::Js(format!("no pending job for tag: {}", tag)));
@@ -496,8 +475,12 @@ impl ServiceWorkerClient {
         let options = Object::new();
         Reflect::set(&options, &"body".into(), &JsValue::from_str(&body_text))
             .map_err(OjsWasmError::from)?;
-        Reflect::set(&options, &"tag".into(), &JsValue::from_str(&format!("ojs-job-{}", job_id)))
-            .map_err(OjsWasmError::from)?;
+        Reflect::set(
+            &options,
+            &"tag".into(),
+            &JsValue::from_str(&format!("ojs-job-{}", job_id)),
+        )
+        .map_err(OjsWasmError::from)?;
 
         let data = Object::new();
         Reflect::set(&data, &"jobId".into(), &JsValue::from_str(job_id))
@@ -506,8 +489,7 @@ impl ServiceWorkerClient {
             .map_err(OjsWasmError::from)?;
         Reflect::set(&data, &"state".into(), &JsValue::from_str(state))
             .map_err(OjsWasmError::from)?;
-        Reflect::set(&options, &"data".into(), &data)
-            .map_err(OjsWasmError::from)?;
+        Reflect::set(&options, &"data".into(), &data).map_err(OjsWasmError::from)?;
 
         // Call self.registration.showNotification(title, options)
         let registration = Reflect::get(&sw_global(), &JsValue::from_str("registration"))

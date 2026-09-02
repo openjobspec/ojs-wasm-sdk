@@ -29,9 +29,7 @@
 //! and works in any runtime that has a global `fetch`.
 
 use crate::error::{ErrorResponse, OjsWasmError, Result};
-use crate::types::{
-    BatchRequest, BatchResponse, EnqueueRequest, JobResponse, WorkflowResponse,
-};
+use crate::types::{BatchRequest, BatchResponse, EnqueueRequest, JobResponse, WorkflowResponse};
 use js_sys::{Function, Promise, Reflect};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -58,7 +56,12 @@ fn edge_global() -> JsValue {
 // Shared transport helpers
 // ---------------------------------------------------------------------------
 
-fn build_request(method: &str, url: &str, body: Option<String>, auth_token: Option<&str>) -> Result<Request> {
+fn build_request(
+    method: &str,
+    url: &str,
+    body: Option<String>,
+    auth_token: Option<&str>,
+) -> Result<Request> {
     let opts = RequestInit::new();
     opts.set_method(method);
 
@@ -159,13 +162,19 @@ impl EdgeClient {
     #[wasm_bindgen(constructor)]
     pub fn new(url: &str) -> Self {
         let base_url = format!("{}{}", url.trim_end_matches('/'), BASE_PATH);
-        Self { base_url, auth_token: None }
+        Self {
+            base_url,
+            auth_token: None,
+        }
     }
 
     /// Create a client with API key authentication.
     pub fn with_auth(url: &str, api_key: &str) -> Self {
         let base_url = format!("{}{}", url.trim_end_matches('/'), BASE_PATH);
-        Self { base_url, auth_token: Some(api_key.to_string()) }
+        Self {
+            base_url,
+            auth_token: Some(api_key.to_string()),
+        }
     }
 
     pub async fn enqueue(
@@ -192,13 +201,8 @@ impl EdgeClient {
             .map_err(JsValue::from)
     }
 
-    pub async fn enqueue_batch(
-        &self,
-        jobs: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
-        self.enqueue_batch_inner(jobs)
-            .await
-            .map_err(JsValue::from)
+    pub async fn enqueue_batch(&self, jobs: JsValue) -> std::result::Result<JsValue, JsValue> {
+        self.enqueue_batch_inner(jobs).await.map_err(JsValue::from)
     }
 
     pub async fn get_job(&self, id: &str) -> std::result::Result<JsValue, JsValue> {
@@ -210,20 +214,12 @@ impl EdgeClient {
     }
 
     /// Create and start a workflow.
-    pub async fn workflow(
-        &self,
-        definition: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
-        self.workflow_inner(definition)
-            .await
-            .map_err(JsValue::from)
+    pub async fn workflow(&self, definition: JsValue) -> std::result::Result<JsValue, JsValue> {
+        self.workflow_inner(definition).await.map_err(JsValue::from)
     }
 
     /// Get the status of a workflow by ID.
-    pub async fn get_workflow(
-        &self,
-        workflow_id: &str,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn get_workflow(&self, workflow_id: &str) -> std::result::Result<JsValue, JsValue> {
         self.get_workflow_inner(workflow_id)
             .await
             .map_err(JsValue::from)
@@ -235,7 +231,12 @@ impl EdgeClient {
 }
 
 impl EdgeClient {
-    async fn enqueue_inner(&self, job_type: &str, args: JsValue, options: Option<crate::types::EnqueueOptions>) -> Result<JsValue> {
+    async fn enqueue_inner(
+        &self,
+        job_type: &str,
+        args: JsValue,
+        options: Option<crate::types::EnqueueOptions>,
+    ) -> Result<JsValue> {
         let args_value: serde_json::Value = serde_wasm_bindgen::from_value(args)
             .map_err(|e| OjsWasmError::Serialization(e.to_string()))?;
         let req = EnqueueRequest {
@@ -304,24 +305,21 @@ impl EdgeClient {
         let url = format!("{}/workflows", self.base_url);
         let resp_text = edge_post(&url, &body, self.auth_token.as_deref()).await?;
         let resp: WorkflowResponse = serde_json::from_str(&resp_text)?;
-        serde_wasm_bindgen::to_value(&resp)
-            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+        serde_wasm_bindgen::to_value(&resp).map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
 
     async fn get_workflow_inner(&self, workflow_id: &str) -> Result<JsValue> {
         let url = format!("{}/workflows/{}", self.base_url, workflow_id);
         let resp_text = edge_get(&url, self.auth_token.as_deref()).await?;
         let resp: WorkflowResponse = serde_json::from_str(&resp_text)?;
-        serde_wasm_bindgen::to_value(&resp)
-            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+        serde_wasm_bindgen::to_value(&resp).map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
 
     async fn health_inner(&self) -> Result<JsValue> {
         let url = format!("{}/health", self.base_url);
         let resp_text = edge_get(&url, self.auth_token.as_deref()).await?;
         let resp: crate::types::HealthResponse = serde_json::from_str(&resp_text)?;
-        serde_wasm_bindgen::to_value(&resp)
-            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+        serde_wasm_bindgen::to_value(&resp).map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
 }
 
@@ -504,13 +502,12 @@ impl CloudflareClient {
         args: JsValue,
         options: JsValue,
     ) -> std::result::Result<JsValue, JsValue> {
-        self.inner.enqueue_with_options(job_type, args, options).await
+        self.inner
+            .enqueue_with_options(job_type, args, options)
+            .await
     }
 
-    pub async fn enqueue_batch(
-        &self,
-        jobs: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn enqueue_batch(&self, jobs: JsValue) -> std::result::Result<JsValue, JsValue> {
         self.inner.enqueue_batch(jobs).await
     }
 
@@ -522,17 +519,11 @@ impl CloudflareClient {
         self.inner.cancel_job(id).await
     }
 
-    pub async fn workflow(
-        &self,
-        definition: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn workflow(&self, definition: JsValue) -> std::result::Result<JsValue, JsValue> {
         self.inner.workflow(definition).await
     }
 
-    pub async fn get_workflow(
-        &self,
-        workflow_id: &str,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn get_workflow(&self, workflow_id: &str) -> std::result::Result<JsValue, JsValue> {
         self.inner.get_workflow(workflow_id).await
     }
 
@@ -566,15 +557,14 @@ impl CloudflareClient {
             .dyn_into()
             .map_err(|_| JsValue::from_str("ctx.waitUntil is not a function"))?;
 
-        let args_value: serde_json::Value = serde_wasm_bindgen::from_value(args)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let args_value: serde_json::Value =
+            serde_wasm_bindgen::from_value(args).map_err(|e| JsValue::from_str(&e.to_string()))?;
         let req = EnqueueRequest {
             job_type: job_type.to_string(),
             args: args_value,
             options: None,
         };
-        let body = serde_json::to_string(&req)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let body = serde_json::to_string(&req).map_err(|e| JsValue::from_str(&e.to_string()))?;
         let url = format!("{}/jobs", self.inner.base_url);
 
         // Build the fetch promise and hand it to waitUntil
@@ -661,13 +651,12 @@ impl DenoClient {
         args: JsValue,
         options: JsValue,
     ) -> std::result::Result<JsValue, JsValue> {
-        self.inner.enqueue_with_options(job_type, args, options).await
+        self.inner
+            .enqueue_with_options(job_type, args, options)
+            .await
     }
 
-    pub async fn enqueue_batch(
-        &self,
-        jobs: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn enqueue_batch(&self, jobs: JsValue) -> std::result::Result<JsValue, JsValue> {
         self.inner.enqueue_batch(jobs).await
     }
 
@@ -679,17 +668,11 @@ impl DenoClient {
         self.inner.cancel_job(id).await
     }
 
-    pub async fn workflow(
-        &self,
-        definition: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn workflow(&self, definition: JsValue) -> std::result::Result<JsValue, JsValue> {
         self.inner.workflow(definition).await
     }
 
-    pub async fn get_workflow(
-        &self,
-        workflow_id: &str,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn get_workflow(&self, workflow_id: &str) -> std::result::Result<JsValue, JsValue> {
         self.inner.get_workflow(workflow_id).await
     }
 
@@ -770,13 +753,12 @@ impl VercelEdgeClient {
         args: JsValue,
         options: JsValue,
     ) -> std::result::Result<JsValue, JsValue> {
-        self.inner.enqueue_with_options(job_type, args, options).await
+        self.inner
+            .enqueue_with_options(job_type, args, options)
+            .await
     }
 
-    pub async fn enqueue_batch(
-        &self,
-        jobs: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn enqueue_batch(&self, jobs: JsValue) -> std::result::Result<JsValue, JsValue> {
         self.inner.enqueue_batch(jobs).await
     }
 
@@ -788,17 +770,11 @@ impl VercelEdgeClient {
         self.inner.cancel_job(id).await
     }
 
-    pub async fn workflow(
-        &self,
-        definition: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn workflow(&self, definition: JsValue) -> std::result::Result<JsValue, JsValue> {
         self.inner.workflow(definition).await
     }
 
-    pub async fn get_workflow(
-        &self,
-        workflow_id: &str,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn get_workflow(&self, workflow_id: &str) -> std::result::Result<JsValue, JsValue> {
         self.inner.get_workflow(workflow_id).await
     }
 
@@ -824,15 +800,14 @@ impl VercelEdgeClient {
             .dyn_into()
             .map_err(|_| JsValue::from_str("waitUntil is not a function"))?;
 
-        let args_value: serde_json::Value = serde_wasm_bindgen::from_value(args)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let args_value: serde_json::Value =
+            serde_wasm_bindgen::from_value(args).map_err(|e| JsValue::from_str(&e.to_string()))?;
         let req = EnqueueRequest {
             job_type: job_type.to_string(),
             args: args_value,
             options: None,
         };
-        let body = serde_json::to_string(&req)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let body = serde_json::to_string(&req).map_err(|e| JsValue::from_str(&e.to_string()))?;
         let url = format!("{}/jobs", self.inner.base_url);
 
         let request = build_request("POST", &url, Some(body), self.inner.auth_token.as_deref())?;

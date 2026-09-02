@@ -64,21 +64,9 @@ impl SSESubscription {
     pub fn on_event(&mut self, callback: Function) {
         let closure = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
             let obj = js_sys::Object::new();
-            let _ = js_sys::Reflect::set(
-                &obj,
-                &"type".into(),
-                &event.type_().into(),
-            );
-            let _ = js_sys::Reflect::set(
-                &obj,
-                &"data".into(),
-                &event.data(),
-            );
-            let _ = js_sys::Reflect::set(
-                &obj,
-                &"id".into(),
-                &event.last_event_id().into(),
-            );
+            let _ = js_sys::Reflect::set(&obj, &"type".into(), &event.type_().into());
+            let _ = js_sys::Reflect::set(&obj, &"data".into(), &event.data());
+            let _ = js_sys::Reflect::set(&obj, &"id".into(), &event.last_event_id().into());
             let _ = callback.call1(&JsValue::NULL, &obj);
         }) as Box<dyn FnMut(web_sys::MessageEvent)>);
 

@@ -3,8 +3,8 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
+use ojs_wasm_sdk::workflow::{batch, chain, group};
 use ojs_wasm_sdk::OJSClient;
-use ojs_wasm_sdk::workflow::{chain, group, batch};
 
 // ===========================================================================
 // OJSClient construction
@@ -168,7 +168,7 @@ fn test_enqueue_options_skip_none() {
 
 #[wasm_bindgen_test]
 fn test_enqueue_request_serialization() {
-    use ojs_wasm_sdk::types::{EnqueueRequest, EnqueueOptions};
+    use ojs_wasm_sdk::types::{EnqueueOptions, EnqueueRequest};
 
     let req = EnqueueRequest {
         job_type: "email.send".to_string(),
@@ -493,7 +493,12 @@ fn test_batch_with_all_callbacks() {
     let callbacks = js_sys::Object::new();
     for key in &["on_complete", "on_success", "on_failure"] {
         let cb = js_sys::Object::new();
-        js_sys::Reflect::set(&cb, &"type".into(), &JsValue::from_str(&format!("cb.{}", key))).unwrap();
+        js_sys::Reflect::set(
+            &cb,
+            &"type".into(),
+            &JsValue::from_str(&format!("cb.{}", key)),
+        )
+        .unwrap();
         js_sys::Reflect::set(&cb, &"args".into(), &js_sys::Array::new()).unwrap();
         js_sys::Reflect::set(&callbacks, &JsValue::from_str(key), &cb).unwrap();
     }
@@ -540,7 +545,10 @@ fn test_batch_non_object_callbacks_fails() {
     jobs.push(&job);
 
     let result = batch(jobs.into(), JsValue::from_str("not an object"));
-    assert!(result.is_err(), "batch() should fail with non-object callbacks");
+    assert!(
+        result.is_err(),
+        "batch() should fail with non-object callbacks"
+    );
 }
 
 // ===========================================================================
@@ -645,13 +653,11 @@ fn test_middleware_remove() {
 
 #[wasm_bindgen_test]
 fn test_middleware_apply() {
-    use ojs_wasm_sdk::middleware::{MiddlewareChain, create_request};
+    use ojs_wasm_sdk::middleware::{create_request, MiddlewareChain};
 
     let mut mw = MiddlewareChain::new();
-    let add_header = js_sys::Function::new_with_args(
-        "req",
-        "req.headers['X-Custom'] = 'test'; return req;",
-    );
+    let add_header =
+        js_sys::Function::new_with_args("req", "req.headers['X-Custom'] = 'test'; return req;");
     mw.add("custom-header", add_header);
 
     let req = create_request("POST", "http://example.com/jobs", JsValue::NULL).unwrap();

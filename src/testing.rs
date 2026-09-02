@@ -63,12 +63,7 @@ impl FakeStore {
     ///
     /// `args_json` should be the JSON-serialized args string.
     /// `queue` is optional (defaults to "default").
-    pub fn record_enqueue(
-        &self,
-        job_type: &str,
-        args_json: &str,
-        queue: Option<String>,
-    ) -> String {
+    pub fn record_enqueue(&self, job_type: &str, args_json: &str, queue: Option<String>) -> String {
         let mut inner = self.inner.lock().unwrap();
         inner.next_id += 1;
         let id = format!("fake-{:06}", inner.next_id);
@@ -206,8 +201,18 @@ mod tests {
         let inner = store.inner.lock().unwrap();
         assert!(inner.enqueued.iter().any(|j| j.job_type == "email.send"));
         assert!(inner.enqueued.iter().any(|j| j.job_type == "report.gen"));
-        assert!(!inner.enqueued.iter().any(|j| j.job_type == "payment.process"));
-        assert_eq!(inner.enqueued.iter().filter(|j| j.job_type == "email.send").count(), 2);
+        assert!(!inner
+            .enqueued
+            .iter()
+            .any(|j| j.job_type == "payment.process"));
+        assert_eq!(
+            inner
+                .enqueued
+                .iter()
+                .filter(|j| j.job_type == "email.send")
+                .count(),
+            2
+        );
         drop(inner);
         assert_eq!(store.enqueued_count(), 3);
     }
@@ -222,8 +227,14 @@ mod tests {
         assert_eq!(processed, 2);
 
         let inner = store.inner.lock().unwrap();
-        assert!(inner.performed.iter().any(|j| j.job_type == "email.send" && j.state == "completed"));
-        assert!(inner.performed.iter().any(|j| j.job_type == "report.gen" && j.state == "completed"));
+        assert!(inner
+            .performed
+            .iter()
+            .any(|j| j.job_type == "email.send" && j.state == "completed"));
+        assert!(inner
+            .performed
+            .iter()
+            .any(|j| j.job_type == "report.gen" && j.state == "completed"));
     }
 
     #[test]

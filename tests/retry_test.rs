@@ -109,7 +109,10 @@ fn fixed_initial_equals_max() {
     let backoff = get_nested(&obj, "backoff");
     let initial = get_f64(&backoff, "initial_ms");
     let max = get_f64(&backoff, "max_ms");
-    assert_eq!(initial, max, "fixed policy should have equal initial and max");
+    assert_eq!(
+        initial, max,
+        "fixed policy should have equal initial and max"
+    );
 }
 
 #[wasm_bindgen_test]

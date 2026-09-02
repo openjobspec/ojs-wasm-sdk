@@ -210,8 +210,12 @@ fn make_callbacks(keys: &[&str]) -> JsValue {
     let callbacks = js_sys::Object::new();
     for key in keys {
         let cb = js_sys::Object::new();
-        js_sys::Reflect::set(&cb, &"type".into(), &JsValue::from_str(&format!("cb.{}", key)))
-            .unwrap();
+        js_sys::Reflect::set(
+            &cb,
+            &"type".into(),
+            &JsValue::from_str(&format!("cb.{}", key)),
+        )
+        .unwrap();
         js_sys::Reflect::set(&cb, &"args".into(), &js_sys::Array::new()).unwrap();
         js_sys::Reflect::set(&callbacks, &JsValue::from_str(key), &cb).unwrap();
     }
@@ -333,11 +337,7 @@ fn batch_error_no_callbacks_message() {
     let result = batch(jobs, callbacks.into());
     let err = result.unwrap_err();
     let msg = err.as_string().unwrap();
-    assert!(
-        msg.contains("at least one callback"),
-        "got: {}",
-        msg
-    );
+    assert!(msg.contains("at least one callback"), "got: {}", msg);
 }
 
 #[wasm_bindgen_test]

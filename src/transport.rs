@@ -34,15 +34,11 @@ async fn execute(request: Request) -> Result<String> {
         .dyn_into()
         .map_err(|_| OjsWasmError::Transport("response is not a Response".into()))?;
 
-    let text = JsFuture::from(
-        resp.text().map_err(OjsWasmError::from)?,
-    )
-    .await
-    .map_err(OjsWasmError::from)?;
+    let text = JsFuture::from(resp.text().map_err(OjsWasmError::from)?)
+        .await
+        .map_err(OjsWasmError::from)?;
 
-    let body = text
-        .as_string()
-        .unwrap_or_default();
+    let body = text.as_string().unwrap_or_default();
 
     if !resp.ok() {
         if let Ok(err_resp) = serde_json::from_str::<ErrorResponse>(&body) {
