@@ -24,7 +24,6 @@ web-sys = { version = "=0.3.94", features = [
     "Headers",
     "Request",
     "RequestInit",
-    "RequestMode",
     "Response",
     "Window",
     "EventSource",
@@ -48,8 +47,14 @@ schema = []
 wasm-bindgen-test = "=0.3.67"
 
 [profile.release]
-opt-level = "s"
+opt-level = "z"
 lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz", "--all-features", "--converge"]
 
 [[bench]]
 name = "serialization"
