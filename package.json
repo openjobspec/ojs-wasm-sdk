@@ -52,7 +52,7 @@
     "build:nodejs": "rm -rf pkg-node && wasm-pack build --target nodejs --release --out-dir pkg-node && node scripts/prepare-package.mjs pkg-node",
     "test:features": "node scripts/check-feature-exports.mjs",
     "test:package": "node scripts/package-smoke.mjs",
-    "clean": "rm -rf pkg pkg-bundler pkg-node .feature-matrix .npm-package-smoke-*",
+    "clean": "rm -rf pkg pkg-bundler pkg-node .feature-matrix .npm-package-smoke-* release-artifacts",
     "prepublishOnly": "npm run build && npm run test:package"
   },
   "devDependencies": {

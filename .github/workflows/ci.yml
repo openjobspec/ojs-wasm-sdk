@@ -173,6 +173,13 @@ jobs:
       - name: Build (release)
         run: npm run build
 
+      - name: Pack and smoke-test publish artifact
+        run: |
+          mkdir -p release-artifacts
+          TARBALL=$(npm pack --ignore-scripts --json --pack-destination release-artifacts | node -e "let data=''; process.stdin.on('data', c => data += c); process.stdin.on('end', () => console.log(JSON.parse(data)[0].filename));")
+          node scripts/package-smoke.mjs "./release-artifacts/${TARBALL}"
+          npm publish --dry-run --ignore-scripts "./release-artifacts/${TARBALL}"
+
       - name: Check bundle size
         run: |
           WASM_FILE=pkg/ojs_wasm_sdk_bg.wasm
@@ -200,6 +207,13 @@ jobs:
           path: pkg/
           retention-days: 7
 
+      - name: Upload publish artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ojs-wasm-release
+          path: release-artifacts/*.tgz
+          retention-days: 7
+
   bench:
     name: Benchmarks
     runs-on: ubuntu-latest
@@ -218,21 +232,15 @@ jobs:
     needs: [build]
     if: github.event_name == 'release'
     permissions:
-      contents: read
+      contents: write
       id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      - name: Download validated package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          targets: wasm32-unknown-unknown
-
-      - name: Install wasm-pack
-        run: cargo install wasm-pack --version 0.15.0 --locked
-
-      - name: Build (release)
-        run: wasm-pack build --target web --release --out-dir pkg
+          name: ojs-wasm-release
+          path: release-artifacts
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -240,7 +248,40 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Validate release version
+        run: |
+          VERSION=$(node -p "require('./release-artifacts/package/package.json').version" 2>/dev/null || true)
+          if [ -z "$VERSION" ]; then
+            TARBALL=$(find release-artifacts -name '*.tgz' -type f -print -quit)
+            VERSION=$(tar -xOf "$TARBALL" package/package.json | node -e "let data=''; process.stdin.on('data', c => data += c); process.stdin.on('end', () => console.log(JSON.parse(data).version));")
+          fi
+          test "${{ github.event.release.tag_name }}" = "v${VERSION}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Create checksums
+        run: shasum -a 256 release-artifacts/*.tgz > release-artifacts/checksums.txt
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: release-artifacts
+          artifact-name: ojs-wasm-sbom.spdx.json
+          output-file: release-artifacts/ojs-wasm-sbom.spdx.json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: release-artifacts/*.tgz
+
       - name: Publish
-        run: npm publish --provenance --access public
+        run: npm publish ./release-artifacts/*.tgz --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Attach release artifacts
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        with:
+          files: |
+            release-artifacts/*.tgz
+            release-artifacts/*.json
+            release-artifacts/checksums.txt
