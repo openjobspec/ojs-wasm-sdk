@@ -28,7 +28,7 @@
 //! If no feature is enabled the [`EdgeClient`] base type is still available
 //! and works in any runtime that has a global `fetch`.
 
-use crate::error::{ErrorResponse, OjsWasmError, Result};
+use crate::error::{OjsWasmError, Result};
 use crate::types::{
     BatchJobInput, BatchRequest, BatchResponse, EnqueueRequest, JobResponse, WorkflowResponse,
 };
@@ -101,23 +101,7 @@ async fn execute(request: Request) -> Result<String> {
         .map_err(OjsWasmError::from)?;
 
     let body = text.as_string().unwrap_or_default();
-
-    if !resp.ok() {
-        if let Ok(err_resp) = serde_json::from_str::<ErrorResponse>(&body) {
-            return Err(OjsWasmError::Server(crate::error::ServerError {
-                code: err_resp.error.code,
-                message: err_resp.error.message,
-                retryable: err_resp.error.retryable,
-            }));
-        }
-        return Err(OjsWasmError::Transport(format!(
-            "HTTP {}: {}",
-            resp.status(),
-            body
-        )));
-    }
-
-    Ok(body)
+    crate::error::interpret_response(resp.ok(), resp.status(), body)
 }
 
 async fn edge_post(url: &str, body: &str, auth: Option<&str>) -> Result<String> {

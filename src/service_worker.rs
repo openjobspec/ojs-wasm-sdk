@@ -5,7 +5,7 @@
 //! for offline job enqueueing and push notification support for job
 //! completion events.
 
-use crate::error::{ErrorResponse, OjsWasmError, Result};
+use crate::error::{OjsWasmError, Result};
 use crate::types::{
     BatchJobInput, BatchRequest, BatchResponse, EnqueueRequest, JobResponse, WorkflowResponse,
 };
@@ -65,23 +65,7 @@ async fn execute(request: Request) -> Result<String> {
         .map_err(OjsWasmError::from)?;
 
     let body = text.as_string().unwrap_or_default();
-
-    if !resp.ok() {
-        if let Ok(err_resp) = serde_json::from_str::<ErrorResponse>(&body) {
-            return Err(OjsWasmError::Server(crate::error::ServerError {
-                code: err_resp.error.code,
-                message: err_resp.error.message,
-                retryable: err_resp.error.retryable,
-            }));
-        }
-        return Err(OjsWasmError::Transport(format!(
-            "HTTP {}: {}",
-            resp.status(),
-            body
-        )));
-    }
-
-    Ok(body)
+    crate::error::interpret_response(resp.ok(), resp.status(), body)
 }
 
 async fn sw_post(url: &str, body: &str) -> Result<String> {
