@@ -734,6 +734,53 @@ fn test_retry_policy_linear() {
 }
 
 // ===========================================================================
+// Schema validator — integer must satisfy a `number` schema (exported path)
+// ===========================================================================
+
+#[wasm_bindgen_test]
+#[cfg(feature = "schema")]
+fn test_schema_validator_integer_satisfies_number() {
+    use ojs_wasm_sdk::schema::SchemaValidator;
+
+    let mut validator = SchemaValidator::new();
+    validator
+        .register(
+            "payment.charge",
+            r#"{"type":"object","properties":{"amount":{"type":"number"}},"required":["amount"]}"#,
+        )
+        .unwrap();
+    validator
+        .register("counter.set", r#"{"type":"integer"}"#)
+        .unwrap();
+
+    for args in [
+        r#"{"amount": 42}"#,
+        r#"{"amount": 1.0}"#,
+        r#"{"amount": -0}"#,
+        r#"{"amount": 1e0}"#,
+    ] {
+        let result = validator.validate("payment.charge", args).unwrap();
+        let valid = js_sys::Reflect::get(&result, &"valid".into()).unwrap();
+        assert_eq!(valid.as_bool(), Some(true), "{args} must be valid");
+    }
+
+    for value in ["1.0", "-0", "1e0"] {
+        let result = validator.validate("counter.set", value).unwrap();
+        let valid = js_sys::Reflect::get(&result, &"valid".into()).unwrap();
+        assert_eq!(valid.as_bool(), Some(true), "{value} must be an integer");
+    }
+    for value in ["1.5", "1e20"] {
+        let result = validator.validate("counter.set", value).unwrap();
+        let valid = js_sys::Reflect::get(&result, &"valid".into()).unwrap();
+        assert_eq!(
+            valid.as_bool(),
+            Some(false),
+            "{value} must not be an integer"
+        );
+    }
+}
+
+// ===========================================================================
 // Encryption — malformed Unicode/hex keys return errors rather than trapping
 // ===========================================================================
 
