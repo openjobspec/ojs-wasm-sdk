@@ -21,16 +21,35 @@
     "edge"
   ],
   "type": "module",
+  "main": "./pkg/ojs_wasm_sdk.js",
+  "module": "./pkg/ojs_wasm_sdk.js",
+  "types": "./pkg/ojs_wasm_sdk.d.ts",
+  "exports": {
+    ".": {
+      "types": "./pkg/ojs_wasm_sdk.d.ts",
+      "browser": "./pkg/ojs_wasm_sdk.js",
+      "import": "./pkg/ojs_wasm_sdk.js",
+      "default": "./pkg/ojs_wasm_sdk.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "pkg/ojs_wasm_sdk_bg.wasm",
+    "pkg/ojs_wasm_sdk_bg.wasm.d.ts",
     "pkg/ojs_wasm_sdk.js",
     "pkg/ojs_wasm_sdk.d.ts",
-    "pkg/package.json"
+    "pkg/snippets/**/*.js",
+    "pkg/package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./pkg/snippets/**"
   ],
   "scripts": {
-    "build": "wasm-pack build --target web --out-dir pkg",
-    "build:bundler": "wasm-pack build --target bundler --out-dir pkg-bundler",
-    "build:nodejs": "wasm-pack build --target nodejs --out-dir pkg-node",
+    "build": "rm -rf pkg && wasm-pack build --target web --release --out-dir pkg && node scripts/prepare-package.mjs pkg",
+    "build:bundler": "rm -rf pkg-bundler && wasm-pack build --target bundler --release --out-dir pkg-bundler && node scripts/prepare-package.mjs pkg-bundler",
+    "build:nodejs": "rm -rf pkg-node && wasm-pack build --target nodejs --release --out-dir pkg-node && node scripts/prepare-package.mjs pkg-node",
     "clean": "rm -rf pkg pkg-bundler pkg-node",
     "prepublishOnly": "npm run build"
   },
