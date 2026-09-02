@@ -32,6 +32,12 @@ pub struct MiddlewareChain {
     middlewares: Vec<(String, Function)>,
 }
 
+impl Default for MiddlewareChain {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl MiddlewareChain {
     #[wasm_bindgen(constructor)]

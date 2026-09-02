@@ -45,6 +45,12 @@ pub struct FakeStore {
     inner: Arc<Mutex<FakeStoreInner>>,
 }
 
+impl Default for FakeStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl FakeStore {
     /// Create a new fake store.

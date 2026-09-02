@@ -38,6 +38,12 @@ pub struct EncryptionCodec {
     _private: (),
 }
 
+impl Default for EncryptionCodec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl EncryptionCodec {
     /// Create a new encryption codec.

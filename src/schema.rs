@@ -28,6 +28,12 @@ pub struct SchemaValidator {
     schemas: HashMap<String, serde_json::Value>,
 }
 
+impl Default for SchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl SchemaValidator {
     /// Create a new schema validator.
