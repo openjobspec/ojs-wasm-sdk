@@ -22,7 +22,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! ojs-wasm-sdk = { version = "0.1", features = ["edge_cloudflare"] }
+//! ojs-wasm-sdk = { version = "0.5.0", default-features = false, features = ["edge_cloudflare"] }
 //! ```
 //!
 //! If no feature is enabled the [`EdgeClient`] base type is still available
@@ -32,7 +32,13 @@ use crate::error::{OjsWasmError, Result};
 use crate::types::{
     BatchJobInput, BatchRequest, BatchResponse, EnqueueRequest, JobResponse, WorkflowResponse,
 };
-use js_sys::{Function, Promise, Reflect};
+use js_sys::Promise;
+#[cfg(any(
+    feature = "edge_cloudflare",
+    feature = "edge_deno",
+    feature = "edge_vercel"
+))]
+use js_sys::{Function, Reflect};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Headers, Request, RequestInit, Response};
@@ -50,6 +56,7 @@ extern "C" {
 }
 
 /// Returns the global `self` object (works in all edge runtimes).
+#[cfg(any(feature = "edge_deno", feature = "edge_vercel"))]
 fn edge_global() -> JsValue {
     js_sys::global().into()
 }
@@ -298,10 +305,10 @@ impl EdgeClient {
 // Shared Edge Types
 // ===========================================================================
 
-/// Configuration for edge-specific storage bindings.
-///
-/// These types represent common edge runtime storage abstractions that can
-/// be used to configure OJS clients with runtime-specific backends.
+// Configuration for edge-specific storage bindings.
+//
+// These types represent common edge runtime storage abstractions that can
+// be used to configure OJS clients with runtime-specific backends.
 
 /// Cloudflare KV namespace binding reference.
 ///
@@ -317,11 +324,13 @@ impl EdgeClient {
 /// };
 /// ```
 #[wasm_bindgen]
+#[cfg(feature = "edge_cloudflare")]
 pub struct KVNamespaceRef {
     namespace: JsValue,
 }
 
 #[wasm_bindgen]
+#[cfg(feature = "edge_cloudflare")]
 impl KVNamespaceRef {
     /// Wrap a Cloudflare KV namespace binding.
     #[wasm_bindgen(constructor)]
@@ -379,11 +388,13 @@ impl KVNamespaceRef {
 /// };
 /// ```
 #[wasm_bindgen]
+#[cfg(feature = "edge_cloudflare")]
 pub struct D1DatabaseRef {
     db: JsValue,
 }
 
 #[wasm_bindgen]
+#[cfg(feature = "edge_cloudflare")]
 impl D1DatabaseRef {
     /// Wrap a Cloudflare D1 database binding.
     #[wasm_bindgen(constructor)]
@@ -439,11 +450,13 @@ impl D1DatabaseRef {
 /// };
 /// ```
 #[wasm_bindgen]
+#[cfg(feature = "edge_cloudflare")]
 pub struct CloudflareClient {
     inner: EdgeClient,
 }
 
 #[wasm_bindgen]
+#[cfg(feature = "edge_cloudflare")]
 impl CloudflareClient {
     #[wasm_bindgen(constructor)]
     pub fn new(url: &str) -> Self {
@@ -565,11 +578,13 @@ impl CloudflareClient {
 /// });
 /// ```
 #[wasm_bindgen]
+#[cfg(feature = "edge_deno")]
 pub struct DenoClient {
     inner: EdgeClient,
 }
 
 #[wasm_bindgen]
+#[cfg(feature = "edge_deno")]
 impl DenoClient {
     #[wasm_bindgen(constructor)]
     pub fn new(url: &str) -> Self {
@@ -672,11 +687,13 @@ impl DenoClient {
 /// }
 /// ```
 #[wasm_bindgen]
+#[cfg(feature = "edge_vercel")]
 pub struct VercelEdgeClient {
     inner: EdgeClient,
 }
 
 #[wasm_bindgen]
+#[cfg(feature = "edge_vercel")]
 impl VercelEdgeClient {
     #[wasm_bindgen(constructor)]
     pub fn new(url: &str) -> Self {

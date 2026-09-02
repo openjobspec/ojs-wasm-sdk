@@ -30,15 +30,18 @@ web-sys = { version = "0.3", features = [
     "MessageEvent",
     "Event",
 ] }
-aes-gcm = "0.10"
-getrandom = { version = "0.2", features = ["js"] }
+aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"], optional = true }
+getrandom = { version = "0.2", features = ["js"], optional = true }
 
 [features]
-default = []
+default = ["edge_all", "service_worker", "encryption", "schema"]
 edge_cloudflare = []
 edge_deno = []
 edge_vercel = []
 edge_all = ["edge_cloudflare", "edge_deno", "edge_vercel"]
+service_worker = []
+encryption = ["dep:aes-gcm", "dep:getrandom"]
+schema = []
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

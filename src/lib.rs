@@ -24,6 +24,7 @@ pub mod error;
 pub mod middleware;
 pub mod queue;
 pub mod retry;
+#[cfg(feature = "service_worker")]
 pub mod service_worker;
 pub mod transport;
 pub mod types;
@@ -31,7 +32,9 @@ pub mod workflow;
 
 // New modules for feature parity with other OJS SDKs
 pub mod durable;
+#[cfg(feature = "encryption")]
 pub mod encryption;
+#[cfg(feature = "schema")]
 pub mod schema;
 pub mod subscribe;
 pub mod testing;

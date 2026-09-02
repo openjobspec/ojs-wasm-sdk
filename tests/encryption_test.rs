@@ -1,3 +1,5 @@
+#![cfg(feature = "encryption")]
+
 //! Tests for the encryption module.
 //!
 //! Tests the AES-256-GCM encryption codec, key handling, and base64/hex utilities.

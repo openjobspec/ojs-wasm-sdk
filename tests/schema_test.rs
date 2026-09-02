@@ -1,3 +1,5 @@
+#![cfg(feature = "schema")]
+
 //! Tests for the schema validation module.
 
 use ojs_wasm_sdk::schema::SchemaValidator;

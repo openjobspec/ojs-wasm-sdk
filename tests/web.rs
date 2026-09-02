@@ -571,6 +571,7 @@ fn test_edge_client_with_auth() {
 }
 
 #[wasm_bindgen_test]
+#[cfg(feature = "edge_cloudflare")]
 fn test_cloudflare_client_creation() {
     use ojs_wasm_sdk::edge::CloudflareClient;
     let client = CloudflareClient::new("https://ojs.example.com");
@@ -578,6 +579,7 @@ fn test_cloudflare_client_creation() {
 }
 
 #[wasm_bindgen_test]
+#[cfg(feature = "edge_cloudflare")]
 fn test_cloudflare_client_with_auth() {
     use ojs_wasm_sdk::edge::CloudflareClient;
     let client = CloudflareClient::with_auth("https://ojs.example.com", "secret");
@@ -585,6 +587,7 @@ fn test_cloudflare_client_with_auth() {
 }
 
 #[wasm_bindgen_test]
+#[cfg(feature = "edge_deno")]
 fn test_deno_client_creation() {
     use ojs_wasm_sdk::edge::DenoClient;
     let client = DenoClient::new("https://ojs.example.com");
@@ -592,6 +595,7 @@ fn test_deno_client_creation() {
 }
 
 #[wasm_bindgen_test]
+#[cfg(feature = "edge_vercel")]
 fn test_vercel_client_creation() {
     use ojs_wasm_sdk::edge::VercelEdgeClient;
     let client = VercelEdgeClient::new("https://ojs.example.com");
@@ -603,6 +607,7 @@ fn test_vercel_client_creation() {
 // ===========================================================================
 
 #[wasm_bindgen_test]
+#[cfg(feature = "service_worker")]
 fn test_service_worker_client_creation() {
     use ojs_wasm_sdk::service_worker::ServiceWorkerClient;
     let client = ServiceWorkerClient::new("https://api.example.com");
