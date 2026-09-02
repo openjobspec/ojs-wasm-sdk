@@ -439,7 +439,8 @@ impl ServiceWorkerClient {
         state: &str,
     ) -> Result<JsValue> {
         let title = format!("Job {}", state);
-        let body_text = format!("{} ({})", job_type, &job_id[..8.min(job_id.len())]);
+        let short_id: String = job_id.chars().take(8).collect();
+        let body_text = format!("{} ({})", job_type, short_id);
 
         // Build notification options: { body, tag, data: { jobId, jobType, state } }
         let options = Object::new();
