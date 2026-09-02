@@ -176,8 +176,9 @@ For service worker contexts with Background Sync and push notification support.
 
 ```typescript
 const client = new ServiceWorkerClient('https://ojs.example.com');
+const syncTagPrefix = background_sync_tag_prefix();
 
-// Register a job for Background Sync (offline enqueueing)
+// Persists to IndexedDB, then registers with SyncManager.
 const tag = await client.register_sync('email.send', [to, subject]);
 
 // Process a pending sync tag
@@ -186,6 +187,11 @@ const job = await client.process_sync(tag);
 // Show a push notification when a job completes
 await client.notify_job_completed(jobId, jobType, state);
 ```
+
+`register_sync()` rejects when `SyncManager` is unavailable. Pending records
+survive Service Worker restarts, remain after enqueue failures, and are removed
+only after a successful response. Use `background_sync_tag_prefix()` when
+filtering `sync` events so application code stays aligned with the SDK.
 
 ---
 

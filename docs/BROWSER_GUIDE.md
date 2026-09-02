@@ -182,7 +182,10 @@ The `ServiceWorkerClient` enables offline job enqueueing via the Background Sync
 
 ```typescript
 // sw.ts (service worker)
-import init, { ServiceWorkerClient } from '@openjobspec/wasm';
+import init, {
+  background_sync_tag_prefix,
+  ServiceWorkerClient,
+} from '@openjobspec/wasm';
 
 let client: ServiceWorkerClient;
 
@@ -205,12 +208,22 @@ self.addEventListener('message', async (event) => {
 });
 
 // Process synced jobs when back online
+const syncTagPrefix = background_sync_tag_prefix();
 self.addEventListener('sync', async (event: any) => {
-  if (event.tag.startsWith('ojs-sync-')) {
+  if (event.tag.startsWith(syncTagPrefix)) {
     event.waitUntil(client.process_sync(event.tag));
   }
 });
 ```
+
+`register_sync()` persists the pending job in IndexedDB before asking
+`SyncManager` to schedule it. The record therefore survives worker restarts,
+is retained after failed enqueues, and is deleted only after success. Active
+processors hold a durable lease to prevent concurrent duplicate sends. Browsers
+without `SyncManager` receive an explicit rejected promise; no unscheduled tag
+is returned. A termination in the narrow interval after server acceptance but
+before IndexedDB deletion can still produce an at-least-once retry, so job
+handlers should be idempotent.
 
 ## CORS Configuration
 

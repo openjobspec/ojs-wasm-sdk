@@ -310,7 +310,10 @@ Background Sync and push notification support.
 
 ```js
 // sw.js -- inside your Service Worker
-import init, { ServiceWorkerClient } from '@openjobspec/wasm';
+import init, {
+  background_sync_tag_prefix,
+  ServiceWorkerClient,
+} from '@openjobspec/wasm';
 
 await init();
 const client = new ServiceWorkerClient('https://api.example.com');
@@ -332,12 +335,25 @@ Then handle the `sync` event in your Service Worker:
 
 ```js
 // sw.js
+const syncTagPrefix = background_sync_tag_prefix();
 self.addEventListener('sync', (event) => {
-  if (event.tag.startsWith('ojs-enqueue-')) {
+  if (event.tag.startsWith(syncTagPrefix)) {
     event.waitUntil(client.process_sync(event.tag));
   }
 });
 ```
+
+Pending jobs are committed to IndexedDB before `SyncManager.register()` is
+called, so they survive Service Worker termination. Failed enqueue attempts
+remain pending and their lease is released for retry; a record is deleted only
+after a successful enqueue response. Concurrent processors are serialized by a
+five-minute durable lease. If Background Sync is unsupported,
+`register_sync()` rejects explicitly instead of returning a tag that was never
+scheduled. If registration itself fails after persistence, the error includes
+the retained tag so the application can retry `process_sync(tag)` manually.
+As with any network request plus local commit, a worker terminated after the
+server accepts the job but before IndexedDB deletion can cause an at-least-once
+retry; handlers should remain idempotent.
 
 ### Push notifications for job completion
 
