@@ -23,7 +23,7 @@ async function setupOJS() {
 
 ```html
 <script type="module">
-  import init, { OJSClient } from 'https://unpkg.com/@openjobspec/wasm/ojs_wasm_sdk.js';
+  import init, { OJSClient } from 'https://unpkg.com/@openjobspec/wasm';
 
   await init();
   const client = new OJSClient('http://localhost:8080');
@@ -239,7 +239,11 @@ Most OJS backends include CORS support. Check your backend's documentation for c
 
 ## Bundle Size
 
-The WASM binary is typically **under 50 KB gzipped**. For optimal loading:
+The full 0.5.0 compatibility build is **149,733 bytes with deterministic
+gzip**. CI fails above the measured 151,552-byte regression budget. The
+no-default core alone remains about 110 KB gzip, so reaching 50 KiB would
+require removing or splitting advertised behavior rather than another safe
+compiler flag. See [Bundle Size Budget](./BUNDLE_SIZE.md). For optimal loading:
 
 1. Ensure your server sends `Content-Type: application/wasm` for `.wasm` files
 2. Enable gzip/brotli compression on your CDN
