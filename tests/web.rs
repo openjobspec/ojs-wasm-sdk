@@ -734,6 +734,26 @@ fn test_retry_policy_linear() {
 }
 
 // ===========================================================================
+// SSE subscription — named listeners must register and tear down cleanly
+// ===========================================================================
+
+#[wasm_bindgen_test]
+fn test_sse_named_listeners_register_and_close() {
+    use ojs_wasm_sdk::subscribe::SSESubscription;
+
+    // Registering several named listeners must succeed. With the leak fix the
+    // closures are retained on the subscription (not `forget`-leaked) and are
+    // dropped together with the EventSource when the subscription is dropped.
+    let sub = SSESubscription::new("http://localhost:8080", "queue:default").unwrap();
+    let noop = js_sys::Function::new_no_args("");
+    sub.on_named_event("job.state_changed", noop.clone())
+        .unwrap();
+    sub.on_named_event("job.completed", noop).unwrap();
+    sub.close();
+    drop(sub);
+}
+
+// ===========================================================================
 // Schema validator — integer must satisfy a `number` schema (exported path)
 // ===========================================================================
 

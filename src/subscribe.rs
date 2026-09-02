@@ -19,8 +19,12 @@
 //! ```
 
 use js_sys::Function;
+use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+
+/// Closure type used for `MessageEvent` listeners registered on the stream.
+type MessageListener = Closure<dyn FnMut(web_sys::MessageEvent)>;
 
 /// SSE subscription for real-time OJS job events.
 ///
@@ -29,9 +33,13 @@ use wasm_bindgen::JsCast;
 #[wasm_bindgen]
 pub struct SSESubscription {
     event_source: web_sys::EventSource,
-    _on_message: Option<Closure<dyn FnMut(web_sys::MessageEvent)>>,
+    _on_message: Option<MessageListener>,
     _on_error: Option<Closure<dyn FnMut(web_sys::Event)>>,
     _on_open: Option<Closure<dyn FnMut(web_sys::Event)>>,
+    // Retained named-event listeners. Held here (rather than leaked via
+    // `Closure::forget`) so they are freed when the subscription is dropped,
+    // together with the `EventSource` they are attached to.
+    _named_listeners: RefCell<Vec<MessageListener>>,
 }
 
 #[wasm_bindgen]
@@ -39,7 +47,7 @@ impl SSESubscription {
     /// Create a new SSE subscription.
     ///
     /// `url` is the OJS server base URL (e.g., "http://localhost:8080").
-    /// `channel` is the SSE channel (e.g., "job:<id>", "queue:<name>").
+    /// `channel` is the SSE channel (e.g., `job:<id>`, `queue:<name>`).
     #[wasm_bindgen(constructor)]
     pub fn new(url: &str, channel: &str) -> Result<SSESubscription, JsValue> {
         let stream_url = format!(
@@ -55,6 +63,7 @@ impl SSESubscription {
             _on_message: None,
             _on_error: None,
             _on_open: None,
+            _named_listeners: RefCell::new(Vec::new()),
         })
     }
 
@@ -90,9 +99,10 @@ impl SSESubscription {
         self.event_source
             .add_event_listener_with_callback(event_type, closure.as_ref().unchecked_ref())?;
 
-        // Leak the closure intentionally — it must live as long as the EventSource.
-        // It will be cleaned up when close() is called (EventSource is dropped).
-        closure.forget();
+        // Retain the closure for the lifetime of the subscription instead of
+        // leaking it with `Closure::forget`. When the subscription is dropped,
+        // the closure and its `EventSource` are torn down together.
+        self._named_listeners.borrow_mut().push(closure);
         Ok(())
     }
 
