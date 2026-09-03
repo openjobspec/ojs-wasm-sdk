@@ -1,10 +1,11 @@
+use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
+use ojs_wasm_sdk::workflow::{batch, chain, group};
 use ojs_wasm_sdk::OJSClient;
-use ojs_wasm_sdk::workflow::{chain, group, batch};
 
 // ===========================================================================
 // OJSClient construction
@@ -168,7 +169,7 @@ fn test_enqueue_options_skip_none() {
 
 #[wasm_bindgen_test]
 fn test_enqueue_request_serialization() {
-    use ojs_wasm_sdk::types::{EnqueueRequest, EnqueueOptions};
+    use ojs_wasm_sdk::types::{EnqueueOptions, EnqueueRequest};
 
     let req = EnqueueRequest {
         job_type: "email.send".to_string(),
@@ -493,7 +494,12 @@ fn test_batch_with_all_callbacks() {
     let callbacks = js_sys::Object::new();
     for key in &["on_complete", "on_success", "on_failure"] {
         let cb = js_sys::Object::new();
-        js_sys::Reflect::set(&cb, &"type".into(), &JsValue::from_str(&format!("cb.{}", key))).unwrap();
+        js_sys::Reflect::set(
+            &cb,
+            &"type".into(),
+            &JsValue::from_str(&format!("cb.{}", key)),
+        )
+        .unwrap();
         js_sys::Reflect::set(&cb, &"args".into(), &js_sys::Array::new()).unwrap();
         js_sys::Reflect::set(&callbacks, &JsValue::from_str(key), &cb).unwrap();
     }
@@ -540,7 +546,10 @@ fn test_batch_non_object_callbacks_fails() {
     jobs.push(&job);
 
     let result = batch(jobs.into(), JsValue::from_str("not an object"));
-    assert!(result.is_err(), "batch() should fail with non-object callbacks");
+    assert!(
+        result.is_err(),
+        "batch() should fail with non-object callbacks"
+    );
 }
 
 // ===========================================================================
@@ -562,6 +571,7 @@ fn test_edge_client_with_auth() {
 }
 
 #[wasm_bindgen_test]
+#[cfg(feature = "edge_cloudflare")]
 fn test_cloudflare_client_creation() {
     use ojs_wasm_sdk::edge::CloudflareClient;
     let client = CloudflareClient::new("https://ojs.example.com");
@@ -569,6 +579,7 @@ fn test_cloudflare_client_creation() {
 }
 
 #[wasm_bindgen_test]
+#[cfg(feature = "edge_cloudflare")]
 fn test_cloudflare_client_with_auth() {
     use ojs_wasm_sdk::edge::CloudflareClient;
     let client = CloudflareClient::with_auth("https://ojs.example.com", "secret");
@@ -576,6 +587,7 @@ fn test_cloudflare_client_with_auth() {
 }
 
 #[wasm_bindgen_test]
+#[cfg(feature = "edge_deno")]
 fn test_deno_client_creation() {
     use ojs_wasm_sdk::edge::DenoClient;
     let client = DenoClient::new("https://ojs.example.com");
@@ -583,6 +595,7 @@ fn test_deno_client_creation() {
 }
 
 #[wasm_bindgen_test]
+#[cfg(feature = "edge_vercel")]
 fn test_vercel_client_creation() {
     use ojs_wasm_sdk::edge::VercelEdgeClient;
     let client = VercelEdgeClient::new("https://ojs.example.com");
@@ -594,10 +607,178 @@ fn test_vercel_client_creation() {
 // ===========================================================================
 
 #[wasm_bindgen_test]
+#[cfg(feature = "service_worker")]
 fn test_service_worker_client_creation() {
     use ojs_wasm_sdk::service_worker::ServiceWorkerClient;
     let client = ServiceWorkerClient::new("https://api.example.com");
     drop(client);
+}
+
+#[wasm_bindgen_test]
+#[cfg(feature = "service_worker")]
+async fn test_background_sync_is_durable_retained_and_leased() {
+    use ojs_wasm_sdk::service_worker::{background_sync_tag_prefix, ServiceWorkerClient};
+
+    let global: JsValue = js_sys::global().into();
+    let registration_key = JsValue::from_str("registration");
+    let fetch_key = JsValue::from_str("fetch");
+    let registered_tag_key = JsValue::from_str("__ojsRegisteredTag");
+    let pending_key = JsValue::from_str("__ojs_pending");
+    let fetch_started_key = JsValue::from_str("__ojsFetchStarted");
+    let resolve_fetch_key = JsValue::from_str("__ojsResolveFetch");
+
+    let old_registration = js_sys::Reflect::get(&global, &registration_key).unwrap();
+    let old_fetch = js_sys::Reflect::get(&global, &fetch_key).unwrap();
+    let old_registered_tag = js_sys::Reflect::get(&global, &registered_tag_key).unwrap();
+    let old_pending = js_sys::Reflect::get(&global, &pending_key).unwrap();
+    let old_fetch_started = js_sys::Reflect::get(&global, &fetch_started_key).unwrap();
+    let old_resolve_fetch = js_sys::Reflect::get(&global, &resolve_fetch_key).unwrap();
+
+    // Unsupported browsers must fail explicitly rather than returning a tag
+    // that will never be scheduled.
+    js_sys::Reflect::set(&global, &registration_key, &JsValue::UNDEFINED).unwrap();
+    let unsupported = ServiceWorkerClient::new("https://api.example.com")
+        .register_sync("email.send", js_sys::Array::new().into())
+        .await
+        .unwrap_err();
+    assert!(unsupported
+        .as_string()
+        .unwrap_or_default()
+        .contains("Background Sync API unavailable"));
+
+    let sync = js_sys::Object::new();
+    let register = js_sys::Function::new_with_args(
+        "tag",
+        "globalThis.__ojsRegisteredTag = tag; return Promise.resolve();",
+    );
+    js_sys::Reflect::set(&sync, &"register".into(), &register).unwrap();
+    let registration = js_sys::Object::new();
+    js_sys::Reflect::set(&registration, &"sync".into(), &sync).unwrap();
+    js_sys::Reflect::set(&global, &registration_key, &registration).unwrap();
+
+    let client = ServiceWorkerClient::new("https://api.example.com");
+    let args = js_sys::Array::new();
+    args.push(&JsValue::from_str("user@example.com"));
+    let tag = client
+        .register_sync("email.send", args.into())
+        .await
+        .unwrap()
+        .as_string()
+        .unwrap();
+    assert!(tag.starts_with(&background_sync_tag_prefix()));
+    assert_eq!(
+        js_sys::Reflect::get(&global, &registered_tag_key)
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some(tag.as_str())
+    );
+
+    // Simulate Service Worker termination: discard the client and any legacy
+    // in-memory storage. The new client must recover the job from IndexedDB.
+    drop(client);
+    let global_object: js_sys::Object = global.clone().unchecked_into();
+    js_sys::Reflect::delete_property(&global_object, &pending_key).unwrap();
+
+    let failing_fetch = js_sys::Function::new_with_args(
+        "_request",
+        "return Promise.resolve(new Response('offline', { status: 503 }));",
+    );
+    js_sys::Reflect::set(&global, &fetch_key, &failing_fetch).unwrap();
+    assert!(
+        ServiceWorkerClient::new("https://api.example.com")
+            .process_sync(&tag)
+            .await
+            .is_err(),
+        "failed enqueue must retain the IndexedDB record"
+    );
+
+    let successful_fetch = js_sys::Function::new_with_args(
+        "_request",
+        "return Promise.resolve(new Response(JSON.stringify({job:{id:'job-sync-1',type:'email.send'}}), {status:201, headers:{'Content-Type':'application/json'}}));",
+    );
+    js_sys::Reflect::set(&global, &fetch_key, &successful_fetch).unwrap();
+    let job = ServiceWorkerClient::new("https://api.example.com")
+        .process_sync(&tag)
+        .await
+        .unwrap();
+    assert_eq!(
+        js_sys::Reflect::get(&job, &"id".into())
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("job-sync-1")
+    );
+    assert!(
+        ServiceWorkerClient::new("https://api.example.com")
+            .process_sync(&tag)
+            .await
+            .is_err(),
+        "record must be deleted only after a successful enqueue"
+    );
+
+    // A second processor must observe the active durable lease and must not
+    // perform a concurrent duplicate enqueue.
+    let concurrent_tag = ServiceWorkerClient::new("https://api.example.com")
+        .register_sync("email.send", js_sys::Array::new().into())
+        .await
+        .unwrap()
+        .as_string()
+        .unwrap();
+    let gated_fetch = js_sys::Function::new_with_args(
+        "_request",
+        "globalThis.__ojsFetchStarted = true; return new Promise((resolve) => { globalThis.__ojsResolveFetch = () => resolve(new Response(JSON.stringify({job:{id:'job-sync-2',type:'email.send'}}), {status:201, headers:{'Content-Type':'application/json'}})); });",
+    );
+    js_sys::Reflect::set(&global, &fetch_key, &gated_fetch).unwrap();
+    js_sys::Reflect::set(&global, &fetch_started_key, &JsValue::FALSE).unwrap();
+
+    let first_tag = concurrent_tag.clone();
+    let first = wasm_bindgen_futures::future_to_promise(async move {
+        ServiceWorkerClient::new("https://api.example.com")
+            .process_sync(&first_tag)
+            .await
+    });
+    let delay =
+        js_sys::Function::new_no_args("return new Promise((resolve) => setTimeout(resolve, 10));");
+    for _ in 0..20 {
+        if js_sys::Reflect::get(&global, &fetch_started_key)
+            .unwrap()
+            .as_bool()
+            == Some(true)
+        {
+            break;
+        }
+        let promise: js_sys::Promise = delay.call0(&JsValue::NULL).unwrap().dyn_into().unwrap();
+        wasm_bindgen_futures::JsFuture::from(promise).await.unwrap();
+    }
+    assert_eq!(
+        js_sys::Reflect::get(&global, &fetch_started_key)
+            .unwrap()
+            .as_bool(),
+        Some(true)
+    );
+
+    let lease_error = ServiceWorkerClient::new("https://api.example.com")
+        .process_sync(&concurrent_tag)
+        .await
+        .unwrap_err()
+        .as_string()
+        .unwrap_or_default();
+    assert!(lease_error.contains("already leased"), "{lease_error}");
+
+    let resolve: js_sys::Function = js_sys::Reflect::get(&global, &resolve_fetch_key)
+        .unwrap()
+        .dyn_into()
+        .unwrap();
+    resolve.call0(&JsValue::NULL).unwrap();
+    wasm_bindgen_futures::JsFuture::from(first).await.unwrap();
+
+    js_sys::Reflect::set(&global, &registration_key, &old_registration).unwrap();
+    js_sys::Reflect::set(&global, &fetch_key, &old_fetch).unwrap();
+    js_sys::Reflect::set(&global, &registered_tag_key, &old_registered_tag).unwrap();
+    js_sys::Reflect::set(&global, &pending_key, &old_pending).unwrap();
+    js_sys::Reflect::set(&global, &fetch_started_key, &old_fetch_started).unwrap();
+    js_sys::Reflect::set(&global, &resolve_fetch_key, &old_resolve_fetch).unwrap();
 }
 
 // ===========================================================================
@@ -645,13 +826,11 @@ fn test_middleware_remove() {
 
 #[wasm_bindgen_test]
 fn test_middleware_apply() {
-    use ojs_wasm_sdk::middleware::{MiddlewareChain, create_request};
+    use ojs_wasm_sdk::middleware::{create_request, MiddlewareChain};
 
     let mut mw = MiddlewareChain::new();
-    let add_header = js_sys::Function::new_with_args(
-        "req",
-        "req.headers['X-Custom'] = 'test'; return req;",
-    );
+    let add_header =
+        js_sys::Function::new_with_args("req", "req.headers['X-Custom'] = 'test'; return req;");
     mw.add("custom-header", add_header);
 
     let req = create_request("POST", "http://example.com/jobs", JsValue::NULL).unwrap();
@@ -725,4 +904,93 @@ fn test_retry_policy_linear() {
     let backoff = js_sys::Reflect::get(&obj, &"backoff".into()).unwrap();
     let bt = js_sys::Reflect::get(&backoff, &"type".into()).unwrap();
     assert_eq!(bt.as_string().unwrap(), "linear");
+}
+
+// ===========================================================================
+// SSE subscription — named listeners must register and tear down cleanly
+// ===========================================================================
+
+#[wasm_bindgen_test]
+fn test_sse_named_listeners_register_and_close() {
+    use ojs_wasm_sdk::subscribe::SSESubscription;
+
+    // Registering several named listeners must succeed. With the leak fix the
+    // closures are retained on the subscription (not `forget`-leaked) and are
+    // dropped together with the EventSource when the subscription is dropped.
+    let sub = SSESubscription::new("http://localhost:8080", "queue:default").unwrap();
+    let noop = js_sys::Function::new_no_args("");
+    sub.on_named_event("job.state_changed", noop.clone())
+        .unwrap();
+    sub.on_named_event("job.completed", noop).unwrap();
+    sub.close();
+    drop(sub);
+}
+
+// ===========================================================================
+// Schema validator — integer must satisfy a `number` schema (exported path)
+// ===========================================================================
+
+#[wasm_bindgen_test]
+#[cfg(feature = "schema")]
+fn test_schema_validator_integer_satisfies_number() {
+    use ojs_wasm_sdk::schema::SchemaValidator;
+
+    let mut validator = SchemaValidator::new();
+    validator
+        .register(
+            "payment.charge",
+            r#"{"type":"object","properties":{"amount":{"type":"number"}},"required":["amount"]}"#,
+        )
+        .unwrap();
+    validator
+        .register("counter.set", r#"{"type":"integer"}"#)
+        .unwrap();
+
+    for args in [
+        r#"{"amount": 42}"#,
+        r#"{"amount": 1.0}"#,
+        r#"{"amount": -0}"#,
+        r#"{"amount": 1e0}"#,
+    ] {
+        let result = validator.validate("payment.charge", args).unwrap();
+        let valid = js_sys::Reflect::get(&result, &"valid".into()).unwrap();
+        assert_eq!(valid.as_bool(), Some(true), "{args} must be valid");
+    }
+
+    for value in ["1.0", "-0", "1e0"] {
+        let result = validator.validate("counter.set", value).unwrap();
+        let valid = js_sys::Reflect::get(&result, &"valid".into()).unwrap();
+        assert_eq!(valid.as_bool(), Some(true), "{value} must be an integer");
+    }
+    for value in ["1.5", "1e20"] {
+        let result = validator.validate("counter.set", value).unwrap();
+        let valid = js_sys::Reflect::get(&result, &"valid".into()).unwrap();
+        assert_eq!(
+            valid.as_bool(),
+            Some(false),
+            "{value} must not be an integer"
+        );
+    }
+}
+
+// ===========================================================================
+// Encryption — malformed Unicode/hex keys return errors rather than trapping
+// ===========================================================================
+
+#[wasm_bindgen_test]
+#[cfg(feature = "encryption")]
+fn test_encryption_rejects_non_ascii_and_invalid_hex_without_trapping() {
+    use ojs_wasm_sdk::encryption::EncryptionCodec;
+
+    let codec = EncryptionCodec::new();
+    for key in [
+        "é00000000000000000000000000000000000000000000000000000000000000",
+        "gg00000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000💥",
+    ] {
+        assert!(
+            codec.encrypt(r#"["secret"]"#, key).is_err(),
+            "malformed key {key:?} must return an error"
+        );
+    }
 }

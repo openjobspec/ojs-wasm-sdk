@@ -254,6 +254,9 @@ export class OJSClient {
 // ServiceWorkerClient
 // ---------------------------------------------------------------------------
 
+/** Canonical prefix for tags returned by `register_sync()`. */
+export function background_sync_tag_prefix(): string;
+
 /** OJS client for Service Worker contexts. Uses global `fetch()`. */
 export class ServiceWorkerClient {
   constructor(url: string);
@@ -271,7 +274,10 @@ export class ServiceWorkerClient {
   get_workflow(workflow_id: string): Promise<WorkflowStatus>;
   health(): Promise<HealthResponse>;
 
-  /** Register a job for Background Sync (offline enqueueing). */
+  /**
+   * Persist a job in IndexedDB and register it for Background Sync.
+   * Rejects explicitly when SyncManager is unavailable.
+   */
   register_sync(type: string, args: unknown[]): Promise<string>;
 
   /** Process a pending sync tag in the `sync` event handler. */
@@ -403,4 +409,3 @@ export class VercelEdgeClient {
     args: unknown[],
   ): void;
 }
-

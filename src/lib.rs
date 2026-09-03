@@ -24,17 +24,20 @@ pub mod error;
 pub mod middleware;
 pub mod queue;
 pub mod retry;
+#[cfg(feature = "service_worker")]
 pub mod service_worker;
 pub mod transport;
 pub mod types;
 pub mod workflow;
 
 // New modules for feature parity with other OJS SDKs
-pub mod encryption;
 pub mod durable;
+#[cfg(feature = "encryption")]
+pub mod encryption;
+#[cfg(feature = "schema")]
+pub mod schema;
 pub mod subscribe;
 pub mod testing;
-pub mod schema;
 
 use error::{OjsWasmError, Result};
 use types::{
@@ -116,13 +119,8 @@ impl OJSClient {
     ///   { type: "report.generate", args: [42] },
     /// ]);
     /// ```
-    pub async fn enqueue_batch(
-        &self,
-        jobs: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
-        self.enqueue_batch_inner(jobs)
-            .await
-            .map_err(JsValue::from)
+    pub async fn enqueue_batch(&self, jobs: JsValue) -> std::result::Result<JsValue, JsValue> {
+        self.enqueue_batch_inner(jobs).await.map_err(JsValue::from)
     }
 
     /// Get a job by ID.
@@ -148,20 +146,12 @@ impl OJSClient {
     ///   { type: "data.transform", args: ["csv"] },
     /// ));
     /// ```
-    pub async fn workflow(
-        &self,
-        definition: JsValue,
-    ) -> std::result::Result<JsValue, JsValue> {
-        self.workflow_inner(definition)
-            .await
-            .map_err(JsValue::from)
+    pub async fn workflow(&self, definition: JsValue) -> std::result::Result<JsValue, JsValue> {
+        self.workflow_inner(definition).await.map_err(JsValue::from)
     }
 
     /// Get the status of a workflow by ID.
-    pub async fn get_workflow(
-        &self,
-        workflow_id: &str,
-    ) -> std::result::Result<JsValue, JsValue> {
+    pub async fn get_workflow(&self, workflow_id: &str) -> std::result::Result<JsValue, JsValue> {
         self.get_workflow_inner(workflow_id)
             .await
             .map_err(JsValue::from)
@@ -234,27 +224,11 @@ impl OJSClient {
     }
 
     async fn enqueue_batch_inner(&self, jobs: JsValue) -> Result<JsValue> {
-        #[derive(serde::Deserialize)]
-        struct JsJob {
-            #[serde(rename = "type")]
-            job_type: String,
-            args: serde_json::Value,
-            #[serde(default)]
-            options: Option<types::EnqueueOptions>,
-        }
-
-        let js_jobs: Vec<JsJob> = serde_wasm_bindgen::from_value(jobs)
+        let js_jobs: Vec<types::BatchJobInput> = serde_wasm_bindgen::from_value(jobs)
             .map_err(|e| OjsWasmError::Serialization(e.to_string()))?;
 
         let batch = BatchRequest {
-            jobs: js_jobs
-                .into_iter()
-                .map(|j| EnqueueRequest {
-                    job_type: j.job_type,
-                    args: j.args,
-                    options: j.options,
-                })
-                .collect(),
+            jobs: js_jobs.into_iter().map(EnqueueRequest::from).collect(),
         };
 
         let body = serde_json::to_string(&batch)?;
@@ -293,8 +267,7 @@ impl OJSClient {
         let resp_text = transport::post(&url, &body).await?;
         let resp: WorkflowResponse = serde_json::from_str(&resp_text)?;
 
-        serde_wasm_bindgen::to_value(&resp)
-            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+        serde_wasm_bindgen::to_value(&resp).map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
 
     async fn get_workflow_inner(&self, workflow_id: &str) -> Result<JsValue> {
@@ -302,8 +275,7 @@ impl OJSClient {
         let resp_text = transport::get(&url).await?;
         let resp: WorkflowResponse = serde_json::from_str(&resp_text)?;
 
-        serde_wasm_bindgen::to_value(&resp)
-            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+        serde_wasm_bindgen::to_value(&resp).map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
 
     async fn health_inner(&self) -> Result<JsValue> {
@@ -311,14 +283,15 @@ impl OJSClient {
         let resp_text = transport::get(&url).await?;
         let resp: HealthResponse = serde_json::from_str(&resp_text)?;
 
-        serde_wasm_bindgen::to_value(&resp)
-            .map_err(|e| OjsWasmError::Serialization(e.to_string()))
+        serde_wasm_bindgen::to_value(&resp).map_err(|e| OjsWasmError::Serialization(e.to_string()))
     }
 }
 
 fn validate_job_type_wasm(job_type: &str) -> Result<()> {
     if job_type.is_empty() {
-        return Err(OjsWasmError::Validation("job type must not be empty".into()));
+        return Err(OjsWasmError::Validation(
+            "job type must not be empty".into(),
+        ));
     }
     if job_type.len() > 255 {
         return Err(OjsWasmError::Validation(format!(
@@ -329,7 +302,9 @@ fn validate_job_type_wasm(job_type: &str) -> Result<()> {
     let valid = job_type.split('.').all(|seg| {
         !seg.is_empty()
             && seg.starts_with(|c: char| c.is_ascii_lowercase())
-            && seg.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+            && seg
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
     });
     if !valid {
         return Err(OjsWasmError::Validation(format!(
@@ -342,7 +317,9 @@ fn validate_job_type_wasm(job_type: &str) -> Result<()> {
 
 fn validate_queue_name_wasm(queue: &str) -> Result<()> {
     if queue.is_empty() {
-        return Err(OjsWasmError::Validation("queue name must not be empty".into()));
+        return Err(OjsWasmError::Validation(
+            "queue name must not be empty".into(),
+        ));
     }
     if queue.len() > 128 {
         return Err(OjsWasmError::Validation(format!(

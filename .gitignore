@@ -16,3 +16,6 @@ Thumbs.db
 
 # Node
 node_modules/
+.feature-matrix/
+.npm-package-smoke-*/
+release-artifacts/

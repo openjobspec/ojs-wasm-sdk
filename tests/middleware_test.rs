@@ -163,14 +163,8 @@ fn middleware_apply_modifies_headers() {
 fn middleware_apply_chain_order_matters() {
     let mut mw = MiddlewareChain::new();
 
-    let set_a = js_sys::Function::new_with_args(
-        "req",
-        "req.headers['X-Order'] = 'A'; return req;",
-    );
-    let set_b = js_sys::Function::new_with_args(
-        "req",
-        "req.headers['X-Order'] = 'B'; return req;",
-    );
+    let set_a = js_sys::Function::new_with_args("req", "req.headers['X-Order'] = 'A'; return req;");
+    let set_b = js_sys::Function::new_with_args("req", "req.headers['X-Order'] = 'B'; return req;");
 
     mw.add("set-a", set_a);
     mw.add("set-b", set_b);
@@ -180,21 +174,20 @@ fn middleware_apply_chain_order_matters() {
 
     let headers = js_sys::Reflect::get(&result, &"headers".into()).unwrap();
     let order = js_sys::Reflect::get(&headers, &"X-Order".into()).unwrap();
-    assert_eq!(order.as_string().unwrap(), "B", "last middleware should win");
+    assert_eq!(
+        order.as_string().unwrap(),
+        "B",
+        "last middleware should win"
+    );
 }
 
 #[wasm_bindgen_test]
 fn middleware_apply_accumulates_headers() {
     let mut mw = MiddlewareChain::new();
 
-    let add_x = js_sys::Function::new_with_args(
-        "req",
-        "req.headers['X-First'] = '1'; return req;",
-    );
-    let add_y = js_sys::Function::new_with_args(
-        "req",
-        "req.headers['X-Second'] = '2'; return req;",
-    );
+    let add_x = js_sys::Function::new_with_args("req", "req.headers['X-First'] = '1'; return req;");
+    let add_y =
+        js_sys::Function::new_with_args("req", "req.headers['X-Second'] = '2'; return req;");
 
     mw.add("first", add_x);
     mw.add("second", add_y);
@@ -220,7 +213,10 @@ fn middleware_apply_null_return_fails() {
     assert!(result.is_err());
 
     let err_msg = result.unwrap_err().as_string().unwrap();
-    assert!(err_msg.contains("bad-mw"), "error should name the middleware");
+    assert!(
+        err_msg.contains("bad-mw"),
+        "error should name the middleware"
+    );
     assert!(err_msg.contains("null/undefined"));
 }
 
@@ -246,7 +242,10 @@ fn middleware_apply_throwing_function_fails() {
     assert!(result.is_err());
 
     let err_msg = result.unwrap_err().as_string().unwrap();
-    assert!(err_msg.contains("error-mw"), "error should name the middleware");
+    assert!(
+        err_msg.contains("error-mw"),
+        "error should name the middleware"
+    );
 }
 
 // ===========================================================================

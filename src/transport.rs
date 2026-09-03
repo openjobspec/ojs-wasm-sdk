@@ -1,4 +1,4 @@
-use crate::error::{ErrorResponse, OjsWasmError, Result};
+use crate::error::{OjsWasmError, Result};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Headers, Request, RequestInit, Response};
@@ -34,32 +34,12 @@ async fn execute(request: Request) -> Result<String> {
         .dyn_into()
         .map_err(|_| OjsWasmError::Transport("response is not a Response".into()))?;
 
-    let text = JsFuture::from(
-        resp.text().map_err(OjsWasmError::from)?,
-    )
-    .await
-    .map_err(OjsWasmError::from)?;
+    let text = JsFuture::from(resp.text().map_err(OjsWasmError::from)?)
+        .await
+        .map_err(OjsWasmError::from)?;
 
-    let body = text
-        .as_string()
-        .unwrap_or_default();
-
-    if !resp.ok() {
-        if let Ok(err_resp) = serde_json::from_str::<ErrorResponse>(&body) {
-            return Err(OjsWasmError::Server(crate::error::ServerError {
-                code: err_resp.error.code,
-                message: err_resp.error.message,
-                retryable: err_resp.error.retryable,
-            }));
-        }
-        return Err(OjsWasmError::Transport(format!(
-            "HTTP {}: {}",
-            resp.status(),
-            body
-        )));
-    }
-
-    Ok(body)
+    let body = text.as_string().unwrap_or_default();
+    crate::error::interpret_response(resp.ok(), resp.status(), body)
 }
 
 /// Send a POST request with a JSON body.

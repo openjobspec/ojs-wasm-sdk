@@ -2,12 +2,18 @@
 
 This guide covers deploying the OJS WASM SDK on edge runtimes: Cloudflare Workers, Deno Deploy, and Vercel Edge Functions.
 
+The npm package enables all edge clients for compatibility. Cargo consumers
+building their own WASM can select only the required exports with
+`default-features = false` plus `edge_cloudflare`, `edge_deno`, or
+`edge_vercel`; `edge_all` enables all three.
+
 ## Why WASM on the Edge?
 
 The OJS WASM SDK compiles the Rust OJS client to WebAssembly, running natively in V8 isolates on edge platforms. Benefits:
 
 - **Sub-millisecond cold starts** — WASM modules load faster than JavaScript bundles
-- **Small footprint** — ~50 KB gzipped, no dependencies
+- **Size-optimized WASM** — no runtime npm dependencies; see the measured
+  bundle-size section in the main README
 - **Consistent behavior** — Same Rust logic across all platforms
 - **Global distribution** — Run at 300+ edge locations
 
@@ -268,4 +274,3 @@ const jobs = await client.enqueue_batch([
   { type: 'email.send', args: ['c@example.com', 'Hello'] },
 ]);
 ```
-

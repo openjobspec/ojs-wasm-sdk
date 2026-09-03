@@ -28,6 +28,12 @@ pub struct SchemaValidator {
     schemas: HashMap<String, serde_json::Value>,
 }
 
+impl Default for SchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl SchemaValidator {
     /// Create a new schema validator.
@@ -98,12 +104,20 @@ fn make_result(valid: bool, errors: Vec<String>) -> Result<JsValue, JsValue> {
 }
 
 /// Basic JSON Schema validation (type checking, required fields, enum).
-fn validate_value(value: &serde_json::Value, schema: &serde_json::Value, path: &str) -> Vec<String> {
+fn validate_value(
+    value: &serde_json::Value,
+    schema: &serde_json::Value,
+    path: &str,
+) -> Vec<String> {
     let mut errors = Vec::new();
 
     if let Some(expected_type) = schema.get("type").and_then(|t| t.as_str()) {
         let actual_type = json_type_name(value);
-        if actual_type != expected_type {
+        // Per JSON Schema, an integer is a valid `number` (numbers are a
+        // superset of integers), so accept an integer where a number is expected.
+        let type_ok =
+            actual_type == expected_type || (expected_type == "number" && actual_type == "integer");
+        if !type_ok {
             errors.push(format!(
                 "{}: expected type '{}', got '{}'",
                 if path.is_empty() { "$" } else { path },
@@ -169,7 +183,7 @@ fn json_type_name(value: &serde_json::Value) -> &'static str {
         serde_json::Value::Null => "null",
         serde_json::Value::Bool(_) => "boolean",
         serde_json::Value::Number(n) => {
-            if n.is_i64() || n.is_u64() {
+            if is_json_schema_integer(n) {
                 "integer"
             } else {
                 "number"
@@ -179,6 +193,112 @@ fn json_type_name(value: &serde_json::Value) -> &'static str {
         serde_json::Value::Array(_) => "array",
         serde_json::Value::Object(_) => "object",
     }
+}
+
+fn is_json_schema_integer(number: &serde_json::Number) -> bool {
+    if number.is_i64() || number.is_u64() {
+        return true;
+    }
+
+    is_integer_representation(&number.to_string())
+}
+
+/// Classify a JSON number representation without converting it to an integer.
+///
+/// `serde_json` stores non-`i64`/`u64` numbers as floating-point values. Using
+/// `fract() == 0.0` alone would accept values that rounded across the integer
+/// bounds, so this checks the normalized decimal representation exactly.
+fn is_integer_representation(representation: &str) -> bool {
+    let (negative, unsigned) = match representation.as_bytes().first() {
+        Some(b'-') => (true, &representation[1..]),
+        Some(b'+') => (false, &representation[1..]),
+        Some(_) => (false, representation),
+        None => return false,
+    };
+
+    let (mantissa, exponent) = match unsigned.find(['e', 'E']) {
+        Some(index) => {
+            let exponent = match unsigned[index + 1..].parse::<i64>() {
+                Ok(value) => value,
+                Err(_) => return false,
+            };
+            (&unsigned[..index], exponent)
+        }
+        None => (unsigned, 0),
+    };
+
+    let mut digits = Vec::with_capacity(mantissa.len());
+    let mut fractional_digits = 0_i64;
+    let mut saw_decimal = false;
+    for byte in mantissa.bytes() {
+        match byte {
+            b'0'..=b'9' => {
+                digits.push(byte);
+                if saw_decimal {
+                    fractional_digits += 1;
+                }
+            }
+            b'.' if !saw_decimal => saw_decimal = true,
+            _ => return false,
+        }
+    }
+    if digits.is_empty() {
+        return false;
+    }
+
+    let first_nonzero = digits.iter().position(|digit| *digit != b'0');
+    let Some(first_nonzero) = first_nonzero else {
+        return true;
+    };
+    digits.drain(..first_nonzero);
+
+    let scale = match exponent.checked_sub(fractional_digits) {
+        Some(value) => value,
+        None => return false,
+    };
+    let trailing_zeroes = if scale < 0 {
+        let removed = match scale
+            .checked_neg()
+            .and_then(|value| usize::try_from(value).ok())
+        {
+            Some(value) => value,
+            None => return false,
+        };
+        if removed >= digits.len()
+            || !digits[digits.len() - removed..]
+                .iter()
+                .all(|digit| *digit == b'0')
+        {
+            return false;
+        }
+        digits.truncate(digits.len() - removed);
+        0
+    } else {
+        match usize::try_from(scale) {
+            Ok(value) => value,
+            Err(_) => return false,
+        }
+    };
+
+    let limit = if negative {
+        b"9223372036854775808".as_slice()
+    } else {
+        b"18446744073709551615".as_slice()
+    };
+    let total_digits = match digits.len().checked_add(trailing_zeroes) {
+        Some(value) => value,
+        None => return false,
+    };
+    if total_digits != limit.len() {
+        return total_digits < limit.len();
+    }
+
+    digits
+        .iter()
+        .copied()
+        .chain(std::iter::repeat(b'0').take(trailing_zeroes))
+        .cmp(limit.iter().copied())
+        != std::cmp::Ordering::Greater
 }
 
 #[cfg(test)]
@@ -252,5 +372,72 @@ mod tests {
 
         let invalid = serde_json::json!(["a", 1]);
         assert!(!validate_value(&invalid, &schema, "").is_empty());
+    }
+
+    #[test]
+    fn test_integer_satisfies_number() {
+        // An integer value must validate against `{"type":"number"}` because
+        // JSON Schema treats numbers as a superset of integers.
+        let schema = serde_json::json!({ "type": "number" });
+        assert!(validate_value(&serde_json::json!(5), &schema, "").is_empty());
+        assert!(validate_value(&serde_json::json!(2.5), &schema, "").is_empty());
+    }
+
+    #[test]
+    fn test_integer_type_still_rejects_float() {
+        // The reverse does not hold: a float is not a valid integer.
+        let schema = serde_json::json!({ "type": "integer" });
+        assert!(validate_value(&serde_json::json!(5), &schema, "").is_empty());
+        assert!(!validate_value(&serde_json::json!(2.5), &schema, "").is_empty());
+    }
+
+    #[test]
+    fn test_integer_accepts_zero_fraction_representations() {
+        let schema = serde_json::json!({ "type": "integer" });
+        for raw in ["1.0", "-0", "1e0", "-2.000e3"] {
+            let value: serde_json::Value = serde_json::from_str(raw).unwrap();
+            assert!(
+                validate_value(&value, &schema, "").is_empty(),
+                "{raw} must be an integer"
+            );
+        }
+    }
+
+    #[test]
+    fn test_integer_rejects_fractional_overflow_and_nonfinite_representations() {
+        let schema = serde_json::json!({ "type": "integer" });
+        for raw in [
+            "1.5",
+            "-0.25",
+            "1e-1",
+            "1e20",
+            "18446744073709551616",
+            "-9223372036854775809",
+        ] {
+            let value: serde_json::Value = serde_json::from_str(raw).unwrap();
+            assert!(
+                !validate_value(&value, &schema, "").is_empty(),
+                "{raw} must not be an integer"
+            );
+        }
+
+        for raw in ["NaN", "Infinity", "-Infinity", "1e400"] {
+            assert!(
+                serde_json::from_str::<serde_json::Value>(raw).is_err()
+                    || !is_integer_representation(raw),
+                "{raw} must not be accepted as an integer"
+            );
+        }
+    }
+
+    #[test]
+    fn test_number_field_accepts_integer_in_object() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": { "amount": { "type": "number" } },
+            "required": ["amount"]
+        });
+        let value = serde_json::json!({ "amount": 42 });
+        assert!(validate_value(&value, &schema, "").is_empty());
     }
 }
